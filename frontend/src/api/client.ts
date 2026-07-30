@@ -6,8 +6,18 @@ import { useAuthStore } from "../store/authStore";
 // ritornano { data }) cosi' le pagine non hanno dovuto cambiare:
 // solo qui si traduce l'URL "REST" nell'azione corrispondente.
 
-const BASE = (import.meta as any).env?.VITE_API_BASE ?? "/api";
-const ENDPOINT = `${BASE}/api.php`;
+// L'endpoint si calcola dalla posizione corrente della pagina, non da un
+// percorso scritto a mano: siccome il routing usa gli hash (#/...), il
+// percorso fisico della pagina resta sempre la cartella di deploy, quindi
+// funziona automaticamente sia in locale sia ovunque venga depositato il
+// progetto sul server, senza bisogno di configurare nulla a build time.
+function computeApiEndpoint(): string {
+  let path = window.location.pathname;
+  if (!path.endsWith("/")) path = path.substring(0, path.lastIndexOf("/") + 1);
+  return `${path}api/api.php`;
+}
+
+const ENDPOINT = computeApiEndpoint();
 
 export class ApiError extends Error {
   response: { status: number; data: any };
