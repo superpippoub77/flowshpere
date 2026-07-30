@@ -1,21 +1,93 @@
-import axios from "axios";
 import { useAuthStore } from "../store/authStore";
 
-export const api = axios.create({ baseURL: "/api" });
+// Il backend e' ora un unico endpoint PHP (api.php) che riceve
+// { action, ...payload } e risponde in JSON. Questo modulo espone
+// una interfaccia identica a quella di axios (get/post/put che
+// ritornano { data }) cosi' le pagine non hanno dovuto cambiare:
+// solo qui si traduce l'URL "REST" nell'azione corrispondente.
 
-api.interceptors.request.use((config) => {
-  const { token, currentCompanyId } = useAuthStore.getState();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  if (currentCompanyId) config.headers["X-Company-Id"] = currentCompanyId;
-  return config;
-});
+const BASE = (import.meta as any).env?.VITE_API_BASE ?? "/api";
+const ENDPOINT = `${BASE}/api.php`;
 
-api.interceptors.response.use(
-  (res) => res,
-  (error) => {
-    if (error?.response?.status === 401) {
-      useAuthStore.getState().logout();
-    }
-    return Promise.reject(error);
+export class ApiError extends Error {
+  response: { status: number; data: any };
+  constructor(status: number, data: any) {
+    super(data?.error ?? "Errore");
+    this.response = { status, data };
   }
-);
+}
+
+type Mapping = { pattern: RegExp; action: string; extract?: (m: RegExpMatchArray) => Record<string, string> };
+
+const MAPPINGS: Mapping[] = [
+  { pattern: /^\/auth\/login$/, action: "auth.login" },
+  { pattern: /^\/auth\/me\/companies$/, action: "auth.meCompanies" },
+
+  { pattern: /^\/workflows$/, action: "__workflows_list_or_create__" },
+  { pattern: /^\/workflows\/([^/]+)$/, action: "workflows.get", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/workflows\/([^/]+)\/draft$/, action: "workflows.saveDraft", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/workflows\/([^/]+)\/publish$/, action: "workflows.publish", extract: (m) => ({ id: m[1] }) },
+
+  { pattern: /^\/instances$/, action: "__instances_list_or_create__" },
+  { pattern: /^\/instances\/([^/]+)$/, action: "instances.get", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/instances\/([^/]+)\/tasks\/([^/]+)\/form$/, action: "instances.formSubmit", extract: (m) => ({ instanceId: m[1], taskId: m[2] }) },
+  { pattern: /^\/instances\/([^/]+)\/tasks\/([^/]+)\/decision$/, action: "instances.decision", extract: (m) => ({ instanceId: m[1], taskId: m[2] }) },
+  { pattern: /^\/instances\/([^/]+)\/tasks\/([^/]+)\/complete$/, action: "instances.complete", extract: (m) => ({ instanceId: m[1], taskId: m[2] }) },
+  { pattern: /^\/instances\/([^/]+)\/comments$/, action: "instances.comment", extract: (m) => ({ instanceId: m[1] }) },
+
+  { pattern: /^\/dashboard\/kpi$/, action: "dashboard.kpi" },
+];
+
+function resolveAction(method: "get" | "post" | "put", url: string): string {
+  for (const m of MAPPINGS) {
+    const match = url.match(m.pattern);
+    if (!match) continue;
+    if (m.action === "__workflows_list_or_create__") return method === "get" ? "workflows.list" : "workflows.create";
+    if (m.action === "__instances_list_or_create__") return method === "get" ? "instances.list" : "instances.create";
+    return m.action;
+  }
+  throw new Error(`Nessuna azione API mappata per ${method.toUpperCase()} ${url}`);
+}
+
+function resolveParams(url: string): Record<string, string> {
+  for (const m of MAPPINGS) {
+    const match = url.match(m.pattern);
+    if (match && m.extract) return m.extract(match);
+  }
+  return {};
+}
+
+async function call(method: "get" | "post" | "put", url: string, body?: any) {
+  const action = resolveAction(method, url);
+  const params = resolveParams(url);
+  const { currentCompanyId } = useAuthStore.getState();
+
+  const payload = {
+    action,
+    ...(currentCompanyId ? { companyId: currentCompanyId } : {}),
+    ...params,
+    ...(body ?? {}),
+  };
+
+  const res = await fetch(ENDPOINT, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    if (res.status === 401) useAuthStore.getState().logout();
+    throw new ApiError(res.status, data);
+  }
+
+  return { data };
+}
+
+export const api = {
+  get: (url: string) => call("get", url),
+  post: (url: string, body?: any) => call("post", url, body),
+  put: (url: string, body?: any) => call("put", url, body),
+};
