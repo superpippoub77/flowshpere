@@ -1,0 +1,140 @@
+:root {
+  --ink-navy: #0e1a2b;
+  --blueprint: #1b3557;
+  --blueprint-line: #7fb8d9;
+  --chalk: #f2f6f5;
+  --signal-amber: #e8a33d;
+  --verdigris: #4f9e8c;
+  --rust: #b33f2e;
+  --paper-grid-size: 22px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "IBM Plex Sans", sans-serif;
+  background: var(--ink-navy);
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+.mono {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+/* --- React Flow: canvas in stile blueprint/schematico --- */
+.blueprint-canvas .react-flow__renderer,
+.blueprint-canvas {
+  background-color: var(--blueprint);
+  background-image: linear-gradient(rgba(127, 184, 217, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(127, 184, 217, 0.16) 1px, transparent 1px);
+  background-size: var(--paper-grid-size) var(--paper-grid-size);
+}
+
+.blueprint-canvas .react-flow__edge-path {
+  stroke: var(--blueprint-line);
+  stroke-width: 1.6;
+}
+
+.blueprint-canvas .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--signal-amber);
+}
+
+.blueprint-canvas .react-flow__handle {
+  width: 9px;
+  height: 9px;
+  background: var(--chalk);
+  border: 1.5px solid var(--blueprint-line);
+}
+
+.blueprint-canvas .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid rgba(127, 184, 217, 0.4);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.blueprint-canvas .react-flow__controls button {
+  background: var(--ink-navy);
+  border-bottom: 1px solid rgba(127, 184, 217, 0.25);
+  fill: var(--chalk);
+  color: var(--chalk);
+}
+
+.schematic-node {
+  min-width: 190px;
+  background: rgba(14, 26, 43, 0.92);
+  border: 1px solid var(--blueprint-line);
+  border-radius: 3px;
+  color: var(--chalk);
+  font-size: 13px;
+  position: relative;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
+}
+
+.schematic-node .stripe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  border-radius: 3px 0 0 3px;
+}
+
+.schematic-node .body {
+  padding: 10px 12px 10px 16px;
+}
+
+.schematic-node .eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  opacity: 0.65;
+  display: block;
+  margin-bottom: 3px;
+}
+
+.schematic-node .label {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 1.25;
+}
+
+.schematic-node .corner-tag {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 8.5px;
+  padding: 1px 4px;
+  background: var(--blueprint-line);
+  color: var(--ink-navy);
+  border-radius: 0 3px 0 3px;
+}
+
+.schematic-node.selected {
+  box-shadow: 0 0 0 2px var(--signal-amber);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(127, 184, 217, 0.35);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

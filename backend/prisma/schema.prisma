@@ -1,0 +1,247 @@
+// Schema iniziale della piattaforma multi-progetto.
+// Prima app: Workflow Management. Il modello e' gia' predisposto
+// per ospitare altre app (Timesheet, CRM, Ticket, ...) tramite
+// la tabella Application + UserCompany, senza doversi riprogettare.
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------- Multi-tenant core ----------
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  suspended Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userCompanies UserCompany[]
+  roles         Role[]
+  workflows     Workflow[]
+  attachments   Attachment[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+}
+
+model Application {
+  id          String  @id @default(cuid())
+  key         String  @unique // es. "workflow", "timesheet", "crm"
+  name        String
+  description String?
+  enabled     Boolean @default(true)
+
+  userCompanies UserCompanyApplication[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  isSuperAdmin Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  companies     UserCompany[]
+  tasks         WorkflowTask[]
+  comments      WorkflowComment[]
+  auditLogs     AuditLog[]
+  attachments   Attachment[]
+  notifications Notification[]
+}
+
+model Role {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  key       String // ADMIN | SUPERVISOR | OPERATOR | custom
+  name      String
+  isSystem  Boolean  @default(false)
+
+  userCompanies UserCompany[]
+
+  @@unique([companyId, key])
+}
+
+// Utente <-> Azienda: un utente puo' appartenere a piu' aziende con ruoli diversi
+model UserCompany {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  roleId    String
+  role      Role    @relation(fields: [roleId], references: [id])
+
+  applications UserCompanyApplication[]
+
+  @@unique([userId, companyId])
+}
+
+model UserCompanyApplication {
+  id            String      @id @default(cuid())
+  userCompanyId String
+  userCompany   UserCompany @relation(fields: [userCompanyId], references: [id])
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  @@unique([userCompanyId, applicationId])
+}
+
+// ---------- Workflow application ----------
+
+enum WorkflowStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Workflow {
+  id        String         @id @default(cuid())
+  companyId String
+  company   Company        @relation(fields: [companyId], references: [id])
+  name      String
+  description String?
+  status    WorkflowStatus @default(DRAFT)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  versions  WorkflowVersion[]
+  instances WorkflowInstance[]
+}
+
+model WorkflowVersion {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id])
+  version    Int
+  nodesJson  String // JSON.stringify dei nodi React Flow
+  edgesJson  String // JSON.stringify degli archi React Flow
+  formsJson  String // JSON.stringify dei form dinamici per nodo
+  publishedAt DateTime @default(now())
+
+  instances WorkflowInstance[]
+}
+
+enum InstanceStatus {
+  BOZZA
+  IN_CORSO
+  IN_ATTESA
+  APPROVATO
+  RIFIUTATO
+  COMPLETATO
+  ANNULLATO
+}
+
+model WorkflowInstance {
+  id                String   @id @default(cuid())
+  workflowId        String
+  workflow          Workflow @relation(fields: [workflowId], references: [id])
+  workflowVersionId String
+  workflowVersion   WorkflowVersion @relation(fields: [workflowVersionId], references: [id])
+  code              String // es. "Richiesta #2458"
+  status            InstanceStatus @default(BOZZA)
+  currentNodeId     String?
+  dataJson          String // valori dei form raccolti durante il runtime
+  createdById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tasks       WorkflowTask[]
+  comments    WorkflowComment[]
+  attachments Attachment[]
+  aiDecisions AiDecision[]
+  auditLogs   AuditLog[]
+}
+
+enum TaskStatus {
+  APERTO
+  APPROVATO
+  RIFIUTATO
+  COMPLETATO
+}
+
+model WorkflowTask {
+  id         String     @id @default(cuid())
+  instanceId String
+  instance   WorkflowInstance @relation(fields: [instanceId], references: [id])
+  nodeId     String // id del nodo React Flow a cui si riferisce
+  nodeType   String
+  nodeLabel  String
+  assignedToId String?
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+  status     TaskStatus @default(APERTO)
+  createdAt  DateTime   @default(now())
+  resolvedAt DateTime?
+}
+
+model WorkflowComment {
+  id         String   @id @default(cuid())
+  instanceId String
+  instance   WorkflowInstance @relation(fields: [instanceId], references: [id])
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+  body       String
+  createdAt  DateTime @default(now())
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  instanceId String?
+  instance   WorkflowInstance? @relation(fields: [instanceId], references: [id])
+  uploadedById String
+  uploadedBy   User    @relation(fields: [uploadedById], references: [id])
+  fileName   String
+  mimeType   String
+  size       Int
+  version    Int      @default(1)
+  createdAt  DateTime @default(now())
+}
+
+model AiDecision {
+  id          String   @id @default(cuid())
+  instanceId  String
+  instance    WorkflowInstance @relation(fields: [instanceId], references: [id])
+  nodeId      String
+  suggestion  String // APPROVA | RIFIUTA | RICHIEDI_REVISIONE
+  confidence  Float
+  autoApplied Boolean  @default(false)
+  reasoning   String?
+  createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  channel   String // email | interna
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id])
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id])
+  instanceId   String?
+  instance     WorkflowInstance? @relation(fields: [instanceId], references: [id])
+  action       String
+  previousValue String?
+  newValue      String?
+  ip            String?
+  device        String?
+  createdAt     DateTime @default(now())
+}
