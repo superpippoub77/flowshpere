@@ -1,4 +1,10 @@
 <?php
+// DIAGNOSTICA TEMPORANEA: mostra l'errore reale invece del generico 500.
+// Rimuovere queste due righe una volta risolto il problema (non lasciarle
+// attive in produzione).
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/includes/auth.php';
