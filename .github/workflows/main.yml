@@ -1,32 +1,28 @@
 name: Deploy FlowSphere to Aruba
-
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-
 jobs:
   build-frontend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Build
         working-directory: frontend
         env:
           VITE_API_BASE: /projects/flowshpere/api
+          VITE_BASE_PATH: /projects/flowshpere/
         run: |
           npm install
           npm run build
-
       - name: Save artifact
         uses: actions/upload-artifact@v4
         with:
           name: dist-files
           path: frontend/dist/
-
   deploy-frontend:
     needs: build-frontend
     runs-on: ubuntu-latest
@@ -35,7 +31,6 @@ jobs:
         with:
           name: dist-files
           path: dist/
-
       - name: Deploy frontend to Aruba
         uses: SamKirkland/FTP-Deploy-Action@v4.3.0
         with:
@@ -44,13 +39,11 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./dist/
           server-dir: /www.filippomorano.com/projects/flowshpere/
-
   deploy-backend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Deploy backend PHP to Aruba
         uses: SamKirkland/FTP-Deploy-Action@v4.3.0
         with:
