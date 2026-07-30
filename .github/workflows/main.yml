@@ -1,0 +1,39 @@
+name: Deploy to Aruba
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-name: dist-files
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build
+      run: |
+        npm install
+        npm run build
+    - name: Save artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-files
+        path: dist/
+  deploy-aruba:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: dist-files
+        path: dist/
+    - name: Deploy to Aruba
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.0
+      with:
+        server: ftp.filippomorano.com
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        local-dir: ./dist/
+        server-dir: /www.filippomorano.com/projects/flowsphere/
