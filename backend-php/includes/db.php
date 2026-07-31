@@ -56,6 +56,15 @@ function run_migrations(PDO $pdo): void
             WHERE role_id IS NULL
         ');
     }
+
+    if (!$hasColumn('applications', 'category')) {
+        $pdo->exec("ALTER TABLE applications ADD COLUMN category TEXT NOT NULL DEFAULT 'Generale'");
+        $pdo->exec("UPDATE applications SET category = 'Gestionale' WHERE app_key IN ('workflow', 'ticket', 'crm')");
+        $pdo->exec("UPDATE applications SET category = 'Risorse Umane' WHERE app_key = 'timesheet'");
+        // le app non ancora sviluppate restano nel catalogo ma abilitate: la
+        // visibilita' effettiva per utente si decide con i permessi, non qui
+        $pdo->exec("UPDATE applications SET enabled = 1 WHERE app_key IN ('timesheet', 'ticket', 'crm')");
+    }
 }
 
 function new_id(string $prefix = ''): string
@@ -79,6 +88,7 @@ function create_schema(PDO $pdo): void
             app_key TEXT UNIQUE NOT NULL,
             name TEXT NOT NULL,
             description TEXT,
+            category TEXT NOT NULL DEFAULT 'Generale',
             enabled INTEGER NOT NULL DEFAULT 1
         );
 

@@ -75,21 +75,30 @@ export function StepDots({
   sequence,
   statuses,
   onSelect,
+  compact,
 }: {
   sequence: FlowNode[];
   statuses: StepStatus[];
-  onSelect: (node: FlowNode, index: number) => void;
+  onSelect?: (node: FlowNode, index: number) => void;
+  compact?: boolean;
 }) {
   return (
-    <Stack direction="row" alignItems="center" sx={{ overflowX: "auto", py: 1 }}>
+    <Stack direction="row" alignItems="center" sx={{ overflowX: "auto", py: compact ? 0 : 1 }}>
       {sequence.map((node, idx) => (
-        <Box key={node.id} sx={{ display: "flex", alignItems: "center", flex: idx < sequence.length - 1 ? 1 : "none" }}>
+        <Box
+          key={node.id}
+          sx={{ display: "flex", alignItems: "center", flex: idx < sequence.length - 1 ? 1 : "none", minWidth: compact ? 18 : undefined }}
+        >
           <Tooltip title={node.data.label}>
-            <Box className={`step-dot ${statuses[idx]}`} onClick={() => onSelect(node, idx)}>
-              {idx + 1}
+            <Box
+              className={`step-dot ${statuses[idx]}${compact ? " compact" : ""}`}
+              onClick={onSelect ? () => onSelect(node, idx) : undefined}
+              sx={onSelect ? undefined : { cursor: "default" }}
+            >
+              {compact ? "" : idx + 1}
             </Box>
           </Tooltip>
-          {idx < sequence.length - 1 && <Box className="step-dot-connector" />}
+          {idx < sequence.length - 1 && <Box className={`step-dot-connector${compact ? " compact" : ""}`} />}
         </Box>
       ))}
     </Stack>

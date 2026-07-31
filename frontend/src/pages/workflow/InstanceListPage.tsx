@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -21,10 +20,14 @@ import {
   TextField,
   Pagination,
   Grid,
+  IconButton,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import TimelineIcon from "@mui/icons-material/TimelineOutlined";
 import dayjs from "dayjs";
 import { api } from "../../api/client";
+import { StepDots, computeMainSequence, computeStepStatuses } from "./StepDots";
+import { InstanceDrawer } from "./InstanceDrawer";
 
 const STATUS_COLOR: Record<string, any> = {
   BOZZA: "default",
@@ -38,11 +41,22 @@ const STATUS_COLOR: Record<string, any> = {
 
 const STATUS_OPTIONS = ["BOZZA", "IN_CORSO", "IN_ATTESA", "APPROVATO", "RIFIUTATO", "COMPLETATO", "ANNULLATO"];
 
+function InlineSteps({ item }: { item: any }) {
+  const nodes = useMemo(() => JSON.parse(item.nodesJson), [item.nodesJson]);
+  const edges = useMemo(() => JSON.parse(item.edgesJson), [item.edgesJson]);
+  const sequence = useMemo(() => computeMainSequence(nodes, edges), [nodes, edges]);
+  const statuses = useMemo(
+    () => computeStepStatuses(sequence, item.tasks, item.currentNodeId, item.status),
+    [sequence, item]
+  );
+  return <StepDots sequence={sequence} statuses={statuses} compact />;
+}
+
 export function InstanceListPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [workflowId, setWorkflowId] = useState("");
+  const [drawerInstanceId, setDrawerInstanceId] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({ code: "", workflowId: "", status: "", anagrafica: "", dateFrom: "", dateTo: "" });
@@ -71,7 +85,7 @@ export function InstanceListPage() {
     onSuccess: (instance) => {
       queryClient.invalidateQueries({ queryKey: ["instances"] });
       setOpen(false);
-      navigate(`/workflow/instances/${instance.id}`);
+      setDrawerInstanceId(instance.id);
     },
   });
 
@@ -92,23 +106,10 @@ export function InstanceListPage() {
       <Paper sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={1.5}>
           <Grid item xs={6} sm={3} md={2}>
-            <TextField
-              label="N. ordine"
-              size="small"
-              fullWidth
-              value={filters.code}
-              onChange={(e) => updateFilter("code", e.target.value)}
-            />
+            <TextField label="N. ordine" size="small" fullWidth value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} />
           </Grid>
           <Grid item xs={6} sm={3} md={2}>
-            <TextField
-              select
-              label="Workflow"
-              size="small"
-              fullWidth
-              value={filters.workflowId}
-              onChange={(e) => updateFilter("workflowId", e.target.value)}
-            >
+            <TextField select label="Workflow" size="small" fullWidth value={filters.workflowId} onChange={(e) => updateFilter("workflowId", e.target.value)}>
               <MenuItem value="">Tutti</MenuItem>
               {(workflows ?? []).map((w: any) => (
                 <MenuItem key={w.id} value={w.id}>
@@ -118,14 +119,7 @@ export function InstanceListPage() {
             </TextField>
           </Grid>
           <Grid item xs={6} sm={3} md={2}>
-            <TextField
-              select
-              label="Stato"
-              size="small"
-              fullWidth
-              value={filters.status}
-              onChange={(e) => updateFilter("status", e.target.value)}
-            >
+            <TextField select label="Stato" size="small" fullWidth value={filters.status} onChange={(e) => updateFilter("status", e.target.value)}>
               <MenuItem value="">Tutti</MenuItem>
               {STATUS_OPTIONS.map((s) => (
                 <MenuItem key={s} value={s}>
@@ -176,25 +170,33 @@ export function InstanceListPage() {
               <TableCell>Codice</TableCell>
               <TableCell>Workflow</TableCell>
               <TableCell>Stato</TableCell>
+              <TableCell>Andamento</TableCell>
               <TableCell>Creata</TableCell>
-              <TableCell>Aggiornata</TableCell>
+              <TableCell align="right">Timeline</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {items.map((inst: any) => (
-              <TableRow key={inst.id} hover sx={{ cursor: "pointer" }} onClick={() => navigate(`/workflow/instances/${inst.id}`)}>
+              <TableRow key={inst.id} hover>
                 <TableCell className="mono">{inst.code}</TableCell>
                 <TableCell>{inst.workflow?.name}</TableCell>
                 <TableCell>
                   <Chip size="small" label={inst.status} color={STATUS_COLOR[inst.status]} />
                 </TableCell>
+                <TableCell sx={{ minWidth: 140 }}>
+                  <InlineSteps item={inst} />
+                </TableCell>
                 <TableCell>{dayjs(inst.createdAt).format("DD/MM/YYYY HH:mm")}</TableCell>
-                <TableCell>{dayjs(inst.updatedAt).format("DD/MM/YYYY HH:mm")}</TableCell>
+                <TableCell align="right">
+                  <IconButton size="small" onClick={() => setDrawerInstanceId(inst.id)}>
+                    <TimelineIcon fontSize="small" />
+                  </IconButton>
+                </TableCell>
               </TableRow>
             ))}
             {items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
                     Nessuna istanza trovata con questi filtri.
                   </Typography>
@@ -214,14 +216,7 @@ export function InstanceListPage() {
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>Nuova istanza</DialogTitle>
         <DialogContent>
-          <TextField
-            select
-            label="Workflow pubblicato"
-            fullWidth
-            sx={{ mt: 1 }}
-            value={workflowId}
-            onChange={(e) => setWorkflowId(e.target.value)}
-          >
+          <TextField select label="Workflow pubblicato" fullWidth sx={{ mt: 1 }} value={workflowId} onChange={(e) => setWorkflowId(e.target.value)}>
             {publishedWorkflows.map((w: any) => (
               <MenuItem key={w.id} value={w.id}>
                 {w.name}
@@ -236,6 +231,8 @@ export function InstanceListPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <InstanceDrawer instanceId={drawerInstanceId} onClose={() => setDrawerInstanceId(null)} />
     </Box>
   );
 }

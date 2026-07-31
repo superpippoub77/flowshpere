@@ -49,7 +49,10 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/companies\/users$/, action: "companies.users" },
 
   { pattern: /^\/admin\/users$/, action: "__admin_users_list_or_create__" },
+  { pattern: /^\/admin\/users\/([^/]+)$/, action: "admin.users.update", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/admin\/companies$/, action: "__admin_companies_list_or_create__" },
+  { pattern: /^\/admin\/companies\/([^/]+)$/, action: "admin.companies.update", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/admin\/applications$/, action: "admin.applications.list" },
   { pattern: /^\/admin\/permissions$/, action: "__admin_permissions_get_or_set__" },
   { pattern: /^\/admin\/permissions\/revoke$/, action: "admin.permissions.revoke" },
 ];

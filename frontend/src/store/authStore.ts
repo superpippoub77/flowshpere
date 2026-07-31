@@ -5,7 +5,7 @@ export interface CompanyOption {
   name: string;
   role: string;
   roleKey: string;
-  applications: { key: string; name: string }[];
+  applications: { key: string; name: string; category?: string }[];
 }
 
 interface AuthState {

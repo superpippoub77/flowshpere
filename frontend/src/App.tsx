@@ -6,7 +6,6 @@ import { DashboardPage } from "./pages/workflow/DashboardPage";
 import { WorkflowListPage } from "./pages/workflow/WorkflowListPage";
 import { WorkflowDesignerPage } from "./pages/workflow/WorkflowDesignerPage";
 import { InstanceListPage } from "./pages/workflow/InstanceListPage";
-import { InstanceDetailPage } from "./pages/workflow/InstanceDetailPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminPermissionsPage } from "./pages/admin/AdminPermissionsPage";
 import { AdminCompaniesPage } from "./pages/admin/AdminCompaniesPage";
@@ -42,7 +41,6 @@ export function App() {
         <Route path="workflow/designer" element={<WorkflowListPage />} />
         <Route path="workflow/designer/:id" element={<WorkflowDesignerPage />} />
         <Route path="workflow/instances" element={<InstanceListPage />} />
-        <Route path="workflow/instances/:id" element={<InstanceDetailPage />} />
 
         <Route
           path="admin/companies"

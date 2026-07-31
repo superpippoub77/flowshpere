@@ -26,25 +26,27 @@ export function AdminPermissionsPage() {
   });
 
   const setMutation = useMutation({
-    mutationFn: async ({ companyId, roleKey }: { companyId: string; roleKey: string }) => {
-      if (!roleKey) return api.post("/admin/permissions/revoke", { userId, companyId });
-      return api.post("/admin/permissions", { userId, companyId, roleKey });
+    mutationFn: async ({ companyId, applicationKey, roleKey }: { companyId: string; applicationKey: string; roleKey: string }) => {
+      if (!roleKey) return api.post("/admin/permissions/revoke", { userId, companyId, applicationKey });
+      return api.post("/admin/permissions", { userId, companyId, applicationKey, roleKey });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-permissions", userId] }),
   });
 
-  const currentRole = (companyId: string) =>
-    perms?.assignments.find((a: any) => a.company_id === companyId && a.app_key === "workflow")?.role_key ?? "";
+  const currentRole = (companyId: string, appKey: string) =>
+    perms?.assignments.find((a: any) => a.company_id === companyId && a.app_key === appKey)?.role_key ?? "";
+
+  const categories: string[] = perms ? Array.from(new Set(perms.applications.map((a: any) => a.category))) : [];
 
   return (
-    <Box sx={{ p: 3, maxWidth: 700 }}>
+    <Box sx={{ p: 3, maxWidth: 900 }}>
       <Stack spacing={0.3} sx={{ mb: 3 }}>
         <Typography variant="overline" color="primary">
           PERMESSI PER PROGETTO
         </Typography>
-        <Typography variant="h5">Visibilita' aziende e ruolo (Workflow)</Typography>
+        <Typography variant="h5">Visibilita' aziende e ruolo per applicazione</Typography>
         <Typography variant="body2" color="text.secondary">
-          Per ogni azienda puoi decidere se l'utente la vede e con quale ruolo, indipendentemente dal suo tipo utente generale.
+          Per ogni azienda e ogni applicazione decidi se l'utente la vede e con quale ruolo, indipendentemente dal suo tipo utente generale.
         </Typography>
       </Stack>
 
@@ -57,38 +59,51 @@ export function AdminPermissionsPage() {
       </TextField>
 
       {userId && perms && (
-        <Paper>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Azienda</TableCell>
-                <TableCell>Ruolo per Workflow</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {perms.companies.map((c: any) => (
-                <TableRow key={c.id} hover>
-                  <TableCell>{c.name}</TableCell>
-                  <TableCell>
-                    <TextField
-                      select
-                      size="small"
-                      value={currentRole(c.id)}
-                      onChange={(e) => setMutation.mutate({ companyId: c.id, roleKey: e.target.value })}
-                      sx={{ minWidth: 200 }}
-                    >
-                      {ROLE_OPTIONS.map((r) => (
-                        <MenuItem key={r.value} value={r.value}>
-                          {r.label}
-                        </MenuItem>
+        <Stack spacing={3}>
+          {categories.map((category) => (
+            <Box key={category}>
+              <Typography variant="overline" color="text.secondary" sx={{ px: 0.5 }}>
+                {category}
+              </Typography>
+              <Paper sx={{ mt: 1 }}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Azienda</TableCell>
+                      {perms.applications.filter((a: any) => a.category === category).map((a: any) => (
+                        <TableCell key={a.app_key}>{a.name}</TableCell>
                       ))}
-                    </TextField>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Paper>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {perms.companies.map((c: any) => (
+                      <TableRow key={c.id} hover>
+                        <TableCell>{c.name}</TableCell>
+                        {perms.applications.filter((a: any) => a.category === category).map((a: any) => (
+                          <TableCell key={a.app_key}>
+                            <TextField
+                              select
+                              size="small"
+                              value={currentRole(c.id, a.app_key)}
+                              onChange={(e) => setMutation.mutate({ companyId: c.id, applicationKey: a.app_key, roleKey: e.target.value })}
+                              sx={{ minWidth: 170 }}
+                            >
+                              {ROLE_OPTIONS.map((r) => (
+                                <MenuItem key={r.value} value={r.value}>
+                                  {r.label}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Paper>
+            </Box>
+          ))}
+        </Stack>
       )}
     </Box>
   );

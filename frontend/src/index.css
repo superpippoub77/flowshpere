@@ -159,6 +159,16 @@ code,
   min-width: 16px;
 }
 
+.step-dot.compact {
+  width: 14px;
+  height: 14px;
+  font-size: 0;
+}
+
+.step-dot-connector.compact {
+  min-width: 6px;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

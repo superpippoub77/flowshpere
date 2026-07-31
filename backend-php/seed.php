@@ -7,21 +7,21 @@ require_once __DIR__ . '/includes/db.php';
 $pdo = db();
 echo "Seeding...\n";
 
-function upsert_application(PDO $pdo, string $key, string $name, bool $enabled): string
+function upsert_application(PDO $pdo, string $key, string $name, string $category, bool $enabled): string
 {
     $stmt = $pdo->prepare('SELECT id FROM applications WHERE app_key = ?');
     $stmt->execute([$key]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($row) return $row['id'];
     $id = new_id('app');
-    $pdo->prepare('INSERT INTO applications (id, app_key, name, enabled) VALUES (?, ?, ?, ?)')->execute([$id, $key, $name, $enabled ? 1 : 0]);
+    $pdo->prepare('INSERT INTO applications (id, app_key, name, category, enabled) VALUES (?, ?, ?, ?, ?)')->execute([$id, $key, $name, $category, $enabled ? 1 : 0]);
     return $id;
 }
 
-$workflowAppId = upsert_application($pdo, 'workflow', 'Workflow Management', true);
-upsert_application($pdo, 'timesheet', 'Timesheet Dipendenti', false);
-upsert_application($pdo, 'ticket', 'Gestione Ticket', false);
-upsert_application($pdo, 'crm', 'CRM', false);
+$workflowAppId = upsert_application($pdo, 'workflow', 'Workflow Management', 'Gestionale', true);
+upsert_application($pdo, 'timesheet', 'Timesheet Dipendenti', 'Risorse Umane', true);
+upsert_application($pdo, 'ticket', 'Gestione Ticket', 'Gestionale', true);
+upsert_application($pdo, 'crm', 'CRM', 'Gestionale', true);
 
 // ---- Azienda demo ----
 $stmt = $pdo->prepare('SELECT id FROM companies WHERE slug = ?');

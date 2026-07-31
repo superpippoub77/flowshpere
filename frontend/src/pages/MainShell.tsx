@@ -153,27 +153,40 @@ export function MainShell() {
         </Box>
 
         <Box sx={{ flex: 1, overflowY: "auto" }}>
-          <List dense sx={{ px: 0.5 }}>
-            {(company?.applications ?? []).map((appItem: any) => (
-              <Box key={appItem.key}>
-                <ListItemButton
-                  onClick={() => setOpenApps((o) => ({ ...o, [appItem.key]: !o[appItem.key] }))}
-                  sx={{ borderRadius: 1 }}
-                >
-                  <ListItemIcon sx={{ minWidth: 34, color: "primary.main" }}>{APP_ICONS[appItem.key] ?? <AccountTreeIcon />}</ListItemIcon>
-                  <ListItemText primary={appItem.name} primaryTypographyProps={{ fontSize: 14, fontWeight: 600 }} />
-                  {openApps[appItem.key] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                </ListItemButton>
-                <Collapse in={!!openApps[appItem.key]}>
-                  <List disablePadding dense>
-                    {(APP_OPERATIONS[appItem.key] ?? []).map((op) => (
-                      <NavItem key={op.to} to={op.to} icon={op.icon} label={op.label} />
-                    ))}
-                  </List>
-                </Collapse>
-              </Box>
-            ))}
-          </List>
+          {(Object.entries(
+            (company?.applications ?? []).reduce((acc: Record<string, any[]>, appItem: any) => {
+              const cat = appItem.category ?? "Generale";
+              (acc[cat] ||= []).push(appItem);
+              return acc;
+            }, {})
+          ) as [string, any[]][]).map(([category, apps]) => (
+            <Box key={category} sx={{ mb: 0.5 }}>
+              <Typography variant="overline" color="text.secondary" sx={{ px: 2, fontSize: 10.5 }}>
+                {category}
+              </Typography>
+              <List dense sx={{ px: 0.5 }}>
+                {apps.map((appItem: any) => (
+                  <Box key={appItem.key}>
+                    <ListItemButton
+                      onClick={() => setOpenApps((o) => ({ ...o, [appItem.key]: !o[appItem.key] }))}
+                      sx={{ borderRadius: 1 }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 34, color: "primary.main" }}>{APP_ICONS[appItem.key] ?? <AccountTreeIcon />}</ListItemIcon>
+                      <ListItemText primary={appItem.name} primaryTypographyProps={{ fontSize: 14, fontWeight: 600 }} />
+                      {openApps[appItem.key] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                    </ListItemButton>
+                    <Collapse in={!!openApps[appItem.key]}>
+                      <List disablePadding dense>
+                        {(APP_OPERATIONS[appItem.key] ?? []).map((op) => (
+                          <NavItem key={op.to} to={op.to} icon={op.icon} label={op.label} />
+                        ))}
+                      </List>
+                    </Collapse>
+                  </Box>
+                ))}
+              </List>
+            </Box>
+          ))}
 
           {user?.isSuperAdmin && (
             <>

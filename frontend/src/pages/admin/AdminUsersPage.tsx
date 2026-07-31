@@ -18,8 +18,10 @@ import {
   DialogActions,
   TextField,
   MenuItem,
+  IconButton,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/EditOutlined";
 import { api } from "../../api/client";
 
 const TYPE_LABEL: Record<string, { label: string; color: any }> = {
@@ -28,10 +30,13 @@ const TYPE_LABEL: Record<string, { label: string; color: any }> = {
   UTENTE: { label: "Utente", color: "default" },
 };
 
+const emptyForm = { fullName: "", email: "", password: "", userType: "UTENTE" };
+
 export function AdminUsersPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ fullName: "", email: "", password: "", userType: "UTENTE" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
 
   const { data: users } = useQuery({
     queryKey: ["admin-users"],
@@ -40,12 +45,32 @@ export function AdminUsersPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => api.post("/admin/users", form),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      setOpen(false);
-      setForm({ fullName: "", email: "", password: "", userType: "UTENTE" });
-    },
+    onSuccess: closeDialog,
   });
+
+  const updateMutation = useMutation({
+    mutationFn: async () => api.put(`/admin/users/${editingId}`, form),
+    onSuccess: closeDialog,
+  });
+
+  function closeDialog() {
+    queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    setOpen(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  }
+
+  function openCreate() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setOpen(true);
+  }
+
+  function openEdit(u: any) {
+    setEditingId(u.id);
+    setForm({ fullName: u.fullName, email: u.email, password: "", userType: u.userType });
+    setOpen(true);
+  }
 
   return (
     <Box sx={{ p: 3 }}>
@@ -56,7 +81,7 @@ export function AdminUsersPage() {
           </Typography>
           <Typography variant="h5">Gestione utenti</Typography>
         </Stack>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
           Nuovo utente
         </Button>
       </Stack>
@@ -68,6 +93,7 @@ export function AdminUsersPage() {
               <TableCell>Nome</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Tipo</TableCell>
+              <TableCell align="right">Azioni</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -78,19 +104,30 @@ export function AdminUsersPage() {
                 <TableCell>
                   <Chip size="small" label={TYPE_LABEL[u.userType]?.label ?? u.userType} color={TYPE_LABEL[u.userType]?.color} />
                 </TableCell>
+                <TableCell align="right">
+                  <IconButton size="small" onClick={() => openEdit(u)}>
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </Paper>
 
-      <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Nuovo utente</DialogTitle>
+      <Dialog open={open} onClose={closeDialog} fullWidth maxWidth="xs">
+        <DialogTitle>{editingId ? "Modifica utente" : "Nuovo utente"}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField label="Nome completo" value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} fullWidth />
             <TextField label="Email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} fullWidth />
-            <TextField label="Password" type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} fullWidth />
+            <TextField
+              label={editingId ? "Nuova password (lascia vuoto per non cambiarla)" : "Password"}
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              fullWidth
+            />
             <TextField select label="Tipo" value={form.userType} onChange={(e) => setForm((f) => ({ ...f, userType: e.target.value }))} fullWidth>
               <MenuItem value="UTENTE">Utente</MenuItem>
               <MenuItem value="ADMIN">Amministratore</MenuItem>
@@ -99,13 +136,13 @@ export function AdminUsersPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>Annulla</Button>
+          <Button onClick={closeDialog}>Annulla</Button>
           <Button
             variant="contained"
-            disabled={!form.fullName || !form.email || !form.password || createMutation.isPending}
-            onClick={() => createMutation.mutate()}
+            disabled={!form.fullName || !form.email || (!editingId && !form.password) || createMutation.isPending || updateMutation.isPending}
+            onClick={() => (editingId ? updateMutation.mutate() : createMutation.mutate())}
           >
-            Crea
+            {editingId ? "Salva" : "Crea"}
           </Button>
         </DialogActions>
       </Dialog>
