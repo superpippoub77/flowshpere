@@ -19,7 +19,7 @@ export function LoginPage() {
     try {
       const res = await api.post("/auth/login", { email, password });
       setSession(res.data.token, res.data.user);
-      navigate("/apps");
+      navigate("/workflow/dashboard");
     } catch (err: any) {
       setError(err?.response?.data?.error || "Accesso non riuscito");
     } finally {
