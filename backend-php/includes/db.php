@@ -21,9 +21,41 @@ function db(): PDO
 
     if ($isNew) {
         create_schema($pdo);
+    } else {
+        run_migrations($pdo);
     }
 
     return $pdo;
+}
+
+// Applica modifiche allo schema su database gia' esistenti (es. quello gia'
+// in produzione), senza perdere i dati.
+function run_migrations(PDO $pdo): void
+{
+    $hasColumn = function (string $table, string $column) use ($pdo): bool {
+        $cols = $pdo->query("PRAGMA table_info($table)")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($cols as $c) if ($c['name'] === $column) return true;
+        return false;
+    };
+
+    if (!$hasColumn('users', 'user_type')) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN user_type TEXT NOT NULL DEFAULT 'UTENTE'");
+        // chi era gia' super admin diventa SUPERADMIN nel nuovo campo "tipo"
+        $pdo->exec("UPDATE users SET user_type = 'SUPERADMIN' WHERE is_super_admin = 1");
+    }
+
+    if (!$hasColumn('user_company_applications', 'role_id')) {
+        $pdo->exec('ALTER TABLE user_company_applications ADD COLUMN role_id TEXT REFERENCES roles(id)');
+        // porta il ruolo gia' assegnato a livello di azienda su ogni app abilitata,
+        // cosi' l'accesso esistente continua a funzionare esattamente come prima
+        $pdo->exec('
+            UPDATE user_company_applications
+            SET role_id = (
+                SELECT uc.role_id FROM user_companies uc WHERE uc.id = user_company_applications.user_company_id
+            )
+            WHERE role_id IS NULL
+        ');
+    }
 }
 
 function new_id(string $prefix = ''): string
@@ -56,6 +88,7 @@ function create_schema(PDO $pdo): void
             password_hash TEXT NOT NULL,
             full_name TEXT NOT NULL,
             is_super_admin INTEGER NOT NULL DEFAULT 0,
+            user_type TEXT NOT NULL DEFAULT 'UTENTE',
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
@@ -80,6 +113,7 @@ function create_schema(PDO $pdo): void
             id TEXT PRIMARY KEY,
             user_company_id TEXT NOT NULL REFERENCES user_companies(id),
             application_id TEXT NOT NULL REFERENCES applications(id),
+            role_id TEXT REFERENCES roles(id),
             UNIQUE(user_company_id, application_id)
         );
 

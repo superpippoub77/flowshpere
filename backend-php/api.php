@@ -39,34 +39,32 @@ switch ($action) {
             ], $companies));
         }
 
-        $stmt = db()->prepare('
-            SELECT uc.id as uc_id, c.id as c_id, c.name as c_name, r.name as r_name, r.role_key as r_key
+        $stmt = db()->prepare("
+            SELECT uc.id as uc_id, c.id as c_id, c.name as c_name, r.name as r_name, r.role_key as r_key, a.id as a_id, a.app_key, a.name as a_name
             FROM user_companies uc
             JOIN companies c ON c.id = uc.company_id
-            JOIN roles r ON r.id = uc.role_id
+            JOIN user_company_applications uca ON uca.user_company_id = uc.id AND uca.role_id IS NOT NULL
+            JOIN applications a ON a.id = uca.application_id AND a.enabled = 1
+            JOIN roles r ON r.id = uca.role_id
             WHERE uc.user_id = ?
-        ');
+        ");
         $stmt->execute([$user['id']]);
-        $memberships = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $result = [];
-        foreach ($memberships as $m) {
-            $appsStmt = db()->prepare('
-                SELECT a.app_key, a.name FROM user_company_applications uca
-                JOIN applications a ON a.id = uca.application_id
-                WHERE uca.user_company_id = ? AND a.enabled = 1
-            ');
-            $appsStmt->execute([$m['uc_id']]);
-            $apps = $appsStmt->fetchAll(PDO::FETCH_ASSOC);
-            $result[] = [
-                'id' => $m['c_id'],
-                'name' => $m['c_name'],
-                'role' => $m['r_name'],
-                'roleKey' => $m['r_key'],
-                'applications' => array_map(fn($a) => ['key' => $a['app_key'], 'name' => $a['name']], $apps),
-            ];
+        // Un'azienda puo' comparire piu' volte (una per app abilitata): le raggruppiamo,
+        // usando il ruolo dell'app "workflow" come ruolo mostrato per quell'azienda.
+        $byCompany = [];
+        foreach ($rows as $row) {
+            if (!isset($byCompany[$row['c_id']])) {
+                $byCompany[$row['c_id']] = ['id' => $row['c_id'], 'name' => $row['c_name'], 'role' => $row['r_name'], 'roleKey' => $row['r_key'], 'applications' => []];
+            }
+            if ($row['app_key'] === 'workflow') {
+                $byCompany[$row['c_id']]['role'] = $row['r_name'];
+                $byCompany[$row['c_id']]['roleKey'] = $row['r_key'];
+            }
+            $byCompany[$row['c_id']]['applications'][] = ['key' => $row['app_key'], 'name' => $row['a_name']];
         }
-        json_response($result);
+        json_response(array_values($byCompany));
         break;
 
     // ---------------- WORKFLOWS ----------------
@@ -174,28 +172,47 @@ switch ($action) {
 
     case 'instances.list':
         $ctx = require_company($user, $input['companyId'] ?? null);
+        $pageSize = 10;
+        $page = max(1, (int) ($input['page'] ?? 1));
+        $offset = ($page - 1) * $pageSize;
+
+        $where = ['w.company_id = ?'];
+        $params = [$ctx['companyId']];
+
         if ($ctx['roleKey'] === 'OPERATOR') {
-            $stmt = db()->prepare('
-                SELECT DISTINCT wi.*, w.name as workflow_name FROM workflow_instances wi
-                JOIN workflows w ON w.id = wi.workflow_id
-                LEFT JOIN workflow_tasks t ON t.instance_id = wi.id
-                WHERE w.company_id = ? AND (wi.created_by_id = ? OR t.assigned_to_id = ?)
-                ORDER BY wi.updated_at DESC
-            ');
-            $stmt->execute([$ctx['companyId'], $user['id'], $user['id']]);
-        } else {
-            $stmt = db()->prepare('
-                SELECT wi.*, w.name as workflow_name FROM workflow_instances wi
-                JOIN workflows w ON w.id = wi.workflow_id
-                WHERE w.company_id = ? ORDER BY wi.updated_at DESC
-            ');
-            $stmt->execute([$ctx['companyId']]);
+            $where[] = '(wi.created_by_id = ? OR EXISTS (SELECT 1 FROM workflow_tasks t WHERE t.instance_id = wi.id AND t.assigned_to_id = ?))';
+            $params[] = $user['id'];
+            $params[] = $user['id'];
         }
+        if (!empty($input['workflowId'])) { $where[] = 'wi.workflow_id = ?'; $params[] = $input['workflowId']; }
+        if (!empty($input['status'])) { $where[] = 'wi.status = ?'; $params[] = $input['status']; }
+        if (!empty($input['code'])) { $where[] = 'wi.code LIKE ?'; $params[] = '%' . $input['code'] . '%'; }
+        if (!empty($input['anagrafica'])) { $where[] = 'wi.data_json LIKE ?'; $params[] = '%' . $input['anagrafica'] . '%'; }
+        if (!empty($input['dateFrom'])) { $where[] = 'date(wi.created_at) >= date(?)'; $params[] = $input['dateFrom']; }
+        if (!empty($input['dateTo'])) { $where[] = 'date(wi.created_at) <= date(?)'; $params[] = $input['dateTo']; }
+
+        $whereSql = implode(' AND ', $where);
+
+        $countStmt = db()->prepare("SELECT COUNT(*) as c FROM workflow_instances wi JOIN workflows w ON w.id = wi.workflow_id WHERE $whereSql");
+        $countStmt->execute($params);
+        $total = (int) $countStmt->fetch(PDO::FETCH_ASSOC)['c'];
+
+        $stmt = db()->prepare("
+            SELECT wi.*, w.name as workflow_name FROM workflow_instances wi
+            JOIN workflows w ON w.id = wi.workflow_id
+            WHERE $whereSql ORDER BY wi.updated_at DESC LIMIT $pageSize OFFSET $offset
+        ");
+        $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        json_response(array_map(fn($i) => [
-            'id' => $i['id'], 'code' => $i['code'], 'status' => $i['status'],
-            'updatedAt' => $i['updated_at'], 'workflow' => ['name' => $i['workflow_name']],
-        ], $rows));
+
+        json_response([
+            'items' => array_map(fn($i) => [
+                'id' => $i['id'], 'code' => $i['code'], 'status' => $i['status'],
+                'updatedAt' => $i['updated_at'], 'createdAt' => $i['created_at'],
+                'workflow' => ['id' => $i['workflow_id'], 'name' => $i['workflow_name']],
+            ], $rows),
+            'total' => $total, 'page' => $page, 'pageSize' => $pageSize,
+        ]);
         break;
 
     case 'instances.create':
@@ -340,6 +357,102 @@ switch ($action) {
         ], $stmt->fetchAll(PDO::FETCH_ASSOC)));
         break;
 
+    // ---------------- AMMINISTRAZIONE (solo Super Amministratore) ----------------
+
+    case 'admin.users.list':
+        require_super_admin($user);
+        $rows = db()->query('SELECT id, email, full_name, user_type, is_super_admin FROM users ORDER BY full_name')->fetchAll(PDO::FETCH_ASSOC);
+        json_response(array_map(fn($u) => [
+            'id' => $u['id'], 'email' => $u['email'], 'fullName' => $u['full_name'],
+            'userType' => $u['user_type'], 'isSuperAdmin' => (bool) $u['is_super_admin'],
+        ], $rows));
+        break;
+
+    case 'admin.users.create':
+        require_super_admin($user);
+        require_fields($input, ['email', 'password', 'fullName', 'userType']);
+        $userType = in_array($input['userType'], ['SUPERADMIN', 'ADMIN', 'UTENTE'], true) ? $input['userType'] : 'UTENTE';
+
+        $stmt = db()->prepare('SELECT id FROM users WHERE email = ?');
+        $stmt->execute([$input['email']]);
+        if ($stmt->fetch()) error_response('Esiste gia\' un utente con questa email', 409);
+
+        $newId = new_id('user');
+        db()->prepare('INSERT INTO users (id, email, password_hash, full_name, is_super_admin, user_type) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([$newId, $input['email'], password_hash($input['password'], PASSWORD_DEFAULT), $input['fullName'], $userType === 'SUPERADMIN' ? 1 : 0, $userType]);
+        json_response(['id' => $newId], 201);
+        break;
+
+    case 'admin.companies.list':
+        require_super_admin($user);
+        $rows = db()->query('SELECT id, name FROM companies ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
+        json_response($rows);
+        break;
+
+    case 'admin.permissions.get':
+        require_super_admin($user);
+        require_fields($input, ['userId']);
+
+        $companies = db()->query('SELECT id, name FROM companies ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = db()->prepare("
+            SELECT c.id as company_id, a.app_key, r.role_key
+            FROM user_companies uc
+            JOIN companies c ON c.id = uc.company_id
+            JOIN user_company_applications uca ON uca.user_company_id = uc.id
+            JOIN applications a ON a.id = uca.application_id
+            LEFT JOIN roles r ON r.id = uca.role_id
+            WHERE uc.user_id = ?
+        ");
+        $stmt->execute([$input['userId']]);
+        $assignments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        json_response(['companies' => $companies, 'assignments' => $assignments]);
+        break;
+
+    case 'admin.permissions.set':
+        require_super_admin($user);
+        require_fields($input, ['userId', 'companyId', 'roleKey']);
+        $roleKey = in_array($input['roleKey'], ['ADMIN', 'SUPERVISOR', 'OPERATOR'], true) ? $input['roleKey'] : 'OPERATOR';
+
+        $workflowApp = db()->query("SELECT id FROM applications WHERE app_key = 'workflow'")->fetch(PDO::FETCH_ASSOC);
+        $roleId = ensure_company_role(db(), $input['companyId'], $roleKey);
+
+        $stmt = db()->prepare('SELECT id FROM user_companies WHERE user_id = ? AND company_id = ?');
+        $stmt->execute([$input['userId'], $input['companyId']]);
+        $uc = $stmt->fetch(PDO::FETCH_ASSOC);
+        $ucId = $uc['id'] ?? null;
+        if (!$ucId) {
+            $ucId = new_id('uc');
+            db()->prepare('INSERT INTO user_companies (id, user_id, company_id, role_id) VALUES (?, ?, ?, ?)')
+                ->execute([$ucId, $input['userId'], $input['companyId'], $roleId]);
+        }
+
+        $stmt = db()->prepare('SELECT id FROM user_company_applications WHERE user_company_id = ? AND application_id = ?');
+        $stmt->execute([$ucId, $workflowApp['id']]);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($existing) {
+            db()->prepare('UPDATE user_company_applications SET role_id = ? WHERE id = ?')->execute([$roleId, $existing['id']]);
+        } else {
+            db()->prepare('INSERT INTO user_company_applications (id, user_company_id, application_id, role_id) VALUES (?, ?, ?, ?)')
+                ->execute([new_id('uca'), $ucId, $workflowApp['id'], $roleId]);
+        }
+        json_response(['ok' => true]);
+        break;
+
+    case 'admin.permissions.revoke':
+        require_super_admin($user);
+        require_fields($input, ['userId', 'companyId']);
+        $workflowApp = db()->query("SELECT id FROM applications WHERE app_key = 'workflow'")->fetch(PDO::FETCH_ASSOC);
+        $stmt = db()->prepare('SELECT id FROM user_companies WHERE user_id = ? AND company_id = ?');
+        $stmt->execute([$input['userId'], $input['companyId']]);
+        $uc = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($uc) {
+            db()->prepare('DELETE FROM user_company_applications WHERE user_company_id = ? AND application_id = ?')
+                ->execute([$uc['id'], $workflowApp['id']]);
+        }
+        json_response(['ok' => true]);
+        break;
+
     // ---------------- DASHBOARD ----------------
 
     case 'dashboard.kpi':
@@ -379,6 +492,22 @@ function find_node_in_instance(string $instanceId, string $nodeId): ?array
     $nodes = json_decode($row['nodes_json'], true);
     foreach ($nodes as $n) if ($n['id'] === $nodeId) return $n;
     return null;
+}
+
+// Trova il ruolo standard (ADMIN/SUPERVISOR/OPERATOR) per l'azienda, creandolo
+// al volo se l'azienda non lo avesse ancora (es. azienda aggiunta dopo il seed).
+function ensure_company_role(PDO $pdo, string $companyId, string $roleKey): string
+{
+    $names = ['ADMIN' => 'Amministratore Aziendale', 'SUPERVISOR' => 'Supervisore', 'OPERATOR' => 'Operatore'];
+    $stmt = $pdo->prepare('SELECT id FROM roles WHERE company_id = ? AND role_key = ?');
+    $stmt->execute([$companyId, $roleKey]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($row) return $row['id'];
+
+    $id = new_id('role');
+    $pdo->prepare('INSERT INTO roles (id, company_id, role_key, name, is_system) VALUES (?, ?, ?, ?, 1)')
+        ->execute([$id, $companyId, $roleKey, $names[$roleKey] ?? $roleKey]);
+    return $id;
 }
 
 function fetch_instance_detail(string $id, string $companyId): array

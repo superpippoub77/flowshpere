@@ -47,6 +47,11 @@ const MAPPINGS: Mapping[] = [
 
   { pattern: /^\/dashboard\/kpi$/, action: "dashboard.kpi" },
   { pattern: /^\/companies\/users$/, action: "companies.users" },
+
+  { pattern: /^\/admin\/users$/, action: "__admin_users_list_or_create__" },
+  { pattern: /^\/admin\/companies$/, action: "admin.companies.list" },
+  { pattern: /^\/admin\/permissions$/, action: "__admin_permissions_get_or_set__" },
+  { pattern: /^\/admin\/permissions\/revoke$/, action: "admin.permissions.revoke" },
 ];
 
 function resolveAction(method: "get" | "post" | "put", url: string): string {
@@ -55,6 +60,8 @@ function resolveAction(method: "get" | "post" | "put", url: string): string {
     if (!match) continue;
     if (m.action === "__workflows_list_or_create__") return method === "get" ? "workflows.list" : "workflows.create";
     if (m.action === "__instances_list_or_create__") return method === "get" ? "instances.list" : "instances.create";
+    if (m.action === "__admin_users_list_or_create__") return method === "get" ? "admin.users.list" : "admin.users.create";
+    if (m.action === "__admin_permissions_get_or_set__") return method === "get" ? "admin.permissions.get" : "admin.permissions.set";
     return m.action;
   }
   throw new Error(`Nessuna azione API mappata per ${method.toUpperCase()} ${url}`);
@@ -98,7 +105,7 @@ async function call(method: "get" | "post" | "put", url: string, body?: any) {
 }
 
 export const api = {
-  get: (url: string) => call("get", url),
+  get: (url: string, params?: any) => call("get", url, params),
   post: (url: string, body?: any) => call("post", url, body),
   put: (url: string, body?: any) => call("put", url, body),
 };

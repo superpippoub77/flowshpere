@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Box, Typography, Card, CardActionArea, CardContent, Stack, Chip, Container } from "@mui/material";
+import { Box, Typography, Card, CardActionArea, CardContent, Stack, Chip, Container, Button } from "@mui/material";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
 import GroupsIcon from "@mui/icons-material/Groups";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettingsOutlined";
 import { api } from "../api/client";
 import { useAuthStore } from "../store/authStore";
 
@@ -42,12 +43,21 @@ export function AppSelectorPage() {
   return (
     <Box sx={{ minHeight: "100vh", background: "var(--ink-navy)", py: 6 }}>
       <Container maxWidth="md">
-        <Typography variant="overline" color="primary">
-          Benvenuto {user?.fullName}
-        </Typography>
-        <Typography variant="h4" sx={{ mb: 4 }}>
-          Applicazioni disponibili
-        </Typography>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+          <Box>
+            <Typography variant="overline" color="primary">
+              Benvenuto {user?.fullName}
+            </Typography>
+            <Typography variant="h4" sx={{ mb: 4 }}>
+              Applicazioni disponibili
+            </Typography>
+          </Box>
+          {user?.isSuperAdmin && (
+            <Button startIcon={<AdminPanelSettingsIcon />} onClick={() => navigate("/admin")}>
+              Amministrazione
+            </Button>
+          )}
+        </Stack>
 
         {list.map((company: any) => (
           <Box key={company.id} sx={{ mb: 4 }}>

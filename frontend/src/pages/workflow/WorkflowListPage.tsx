@@ -42,7 +42,7 @@ export function WorkflowListPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const startNode = { id: "n1", type: "start", data: { label: "Inizio Processo" } };
+      const startNode = { id: "n1", type: "start", position: { x: 250, y: 60 }, data: { label: "Inizio Processo" } };
       const res = await api.post("/workflows", { name, description, nodes: [startNode], edges: [] });
       return res.data;
     },

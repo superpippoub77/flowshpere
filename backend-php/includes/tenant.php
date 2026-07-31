@@ -11,16 +11,26 @@ function require_company(array $user, ?string $companyId): array
         return ['companyId' => $companyId, 'roleKey' => 'SUPER_ADMIN'];
     }
 
-    $stmt = db()->prepare('
+    // Il ruolo e' specifico per applicazione: lo stesso utente puo' avere un
+    // ruolo diverso per Workflow rispetto ad altre app future, anche nella
+    // stessa azienda.
+    $stmt = db()->prepare("
         SELECT r.role_key FROM user_companies uc
-        JOIN roles r ON r.id = uc.role_id
+        JOIN user_company_applications uca ON uca.user_company_id = uc.id
+        JOIN applications a ON a.id = uca.application_id AND a.app_key = 'workflow'
+        JOIN roles r ON r.id = uca.role_id
         WHERE uc.user_id = ? AND uc.company_id = ?
-    ');
+    ");
     $stmt->execute([$user['id'], $companyId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row) error_response('Nessun accesso a questa azienda', 403);
 
     return ['companyId' => $companyId, 'roleKey' => $row['role_key']];
+}
+
+function require_super_admin(array $user): void
+{
+    if (!$user['is_super_admin']) error_response('Riservato al Super Amministratore', 403);
 }
 
 function require_role(string $roleKey, array $allowed): void

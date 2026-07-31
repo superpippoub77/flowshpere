@@ -82,15 +82,22 @@ foreach ($usersDef as [$email, $fullName, $roleKey]) {
     $stmt = $pdo->prepare('SELECT id FROM user_company_applications WHERE user_company_id = ? AND application_id = ?');
     $stmt->execute([$ucId, $workflowAppId]);
     if (!$stmt->fetch()) {
-        $pdo->prepare('INSERT INTO user_company_applications (id, user_company_id, application_id) VALUES (?, ?, ?)')->execute([new_id('uca'), $ucId, $workflowAppId]);
+        $pdo->prepare('INSERT INTO user_company_applications (id, user_company_id, application_id, role_id) VALUES (?, ?, ?, ?)')
+            ->execute([new_id('uca'), $ucId, $workflowAppId, $roleIds[$roleKey]]);
     }
+}
+
+// Tipo utente globale (indipendente dal ruolo per-progetto/azienda sopra)
+$userTypeByEmail = ['admin@demo.it' => 'ADMIN', 'supervisore@demo.it' => 'UTENTE', 'operatore@demo.it' => 'UTENTE'];
+foreach ($userTypeByEmail as $email => $type) {
+    $pdo->prepare('UPDATE users SET user_type = ? WHERE email = ?')->execute([$type, $email]);
 }
 
 // Super admin globale
 $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ?');
 $stmt->execute(['superadmin@platform.it']);
 if (!$stmt->fetch()) {
-    $pdo->prepare('INSERT INTO users (id, email, password_hash, full_name, is_super_admin) VALUES (?, ?, ?, ?, 1)')
+    $pdo->prepare('INSERT INTO users (id, email, password_hash, full_name, is_super_admin, user_type) VALUES (?, ?, ?, ?, 1, "SUPERADMIN")')
         ->execute([new_id('user'), 'superadmin@platform.it', $passwordHash, 'Super Admin']);
 }
 
