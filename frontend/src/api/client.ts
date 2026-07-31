@@ -38,6 +38,8 @@ type Mapping = { pattern: RegExp; action: string; extract?: (m: RegExpMatchArray
 const MAPPINGS: Mapping[] = [
   { pattern: /^\/auth\/login$/, action: "auth.login" },
   { pattern: /^\/auth\/me\/companies$/, action: "auth.meCompanies" },
+  { pattern: /^\/auth\/profile$/, action: "auth.updateProfile" },
+  { pattern: /^\/search$/, action: "search.global" },
 
   { pattern: /^\/workflows$/, action: "__workflows_list_or_create__" },
   { pattern: /^\/workflows\/([^/]+)$/, action: "workflows.get", extract: (m) => ({ id: m[1] }) },

@@ -29,6 +29,60 @@ switch ($action) {
         json_response(['token' => $u['id'], 'user' => $u]);
         break;
 
+    case 'auth.updateProfile':
+        $fields = [];
+        $params = [];
+        if (!empty($input['fullName'])) { $fields[] = 'full_name = ?'; $params[] = $input['fullName']; }
+        if (!empty($input['password'])) { $fields[] = 'password_hash = ?'; $params[] = password_hash($input['password'], PASSWORD_DEFAULT); }
+        if (!empty($fields)) {
+            $params[] = $user['id'];
+            db()->prepare('UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+        }
+        $stmt = db()->prepare('SELECT * FROM users WHERE id = ?');
+        $stmt->execute([$user['id']]);
+        $u = $stmt->fetch(PDO::FETCH_ASSOC);
+        json_response(['id' => $u['id'], 'email' => $u['email'], 'fullName' => $u['full_name'], 'isSuperAdmin' => (bool) $u['is_super_admin']]);
+        break;
+
+    case 'search.global':
+        require_fields($input, ['query']);
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        $q = '%' . $input['query'] . '%';
+        $results = [];
+
+        $stmt = db()->prepare('SELECT id, name, status FROM workflows WHERE company_id = ? AND name LIKE ? LIMIT 8');
+        $stmt->execute([$ctx['companyId'], $q]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $w) {
+            $results[] = ['type' => 'workflow', 'id' => $w['id'], 'label' => $w['name'], 'subtitle' => $w['status'], 'link' => '/workflow/designer/' . $w['id']];
+        }
+
+        $stmt = db()->prepare('
+            SELECT wi.id, wi.code, wi.status, w.name as workflow_name FROM workflow_instances wi
+            JOIN workflows w ON w.id = wi.workflow_id
+            WHERE w.company_id = ? AND (wi.code LIKE ? OR wi.data_json LIKE ?) LIMIT 8
+        ');
+        $stmt->execute([$ctx['companyId'], $q, $q]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $i) {
+            $results[] = ['type' => 'instance', 'id' => $i['id'], 'label' => $i['code'], 'subtitle' => $i['workflow_name'] . ' — ' . $i['status'], 'link' => '/workflow/instances'];
+        }
+
+        if ($user['is_super_admin']) {
+            $stmt = db()->prepare('SELECT id, full_name, email FROM users WHERE full_name LIKE ? OR email LIKE ? LIMIT 8');
+            $stmt->execute([$q, $q]);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $u) {
+                $results[] = ['type' => 'user', 'id' => $u['id'], 'label' => $u['full_name'], 'subtitle' => $u['email'], 'link' => '/admin/users'];
+            }
+
+            $stmt = db()->prepare('SELECT id, name FROM companies WHERE name LIKE ? LIMIT 8');
+            $stmt->execute([$q]);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                $results[] = ['type' => 'company', 'id' => $c['id'], 'label' => $c['name'], 'subtitle' => 'Azienda', 'link' => '/admin/companies'];
+            }
+        }
+
+        json_response($results);
+        break;
+
     case 'auth.meCompanies':
         if ($user['is_super_admin']) {
             $companies = db()->query('SELECT * FROM companies ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);

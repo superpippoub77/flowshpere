@@ -22,7 +22,6 @@ body,
 
 body {
   font-family: "IBM Plex Sans", sans-serif;
-  background: var(--ink-navy);
   -webkit-font-smoothing: antialiased;
 }
 

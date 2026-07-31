@@ -34,7 +34,8 @@ export function LoginPage() {
         display: "grid",
         placeItems: "center",
         background:
-          "radial-gradient(circle at 20% 20%, rgba(127,184,217,0.12), transparent 45%), var(--ink-navy)",
+          "radial-gradient(circle at 20% 20%, rgba(127,184,217,0.12), transparent 45%)",
+        bgcolor: "background.default",
         px: 2,
       }}
     >

@@ -34,6 +34,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddIcon from "@mui/icons-material/Add";
 import SaveIcon from "@mui/icons-material/SaveOutlined";
 import { api } from "../../api/client";
+import { useStatusStore } from "../../store/statusStore";
 import { NODE_PALETTE, nodeTypes } from "./nodeTypes";
 
 const FIELD_TYPES = ["text", "textarea", "numero", "valuta", "data", "checkbox", "select", "radio", "allegato", "firma"];
@@ -135,15 +136,23 @@ function DesignerInner() {
     setSelectedId(null);
   }
 
+  const setStatus = useStatusStore((s) => s.set);
+
   const saveMutation = useMutation({
-    mutationFn: async () =>
-      api.put(`/workflows/${id}/draft`, {
+    mutationFn: async () => {
+      setStatus("saving", "Salvataggio bozza...");
+      return api.put(`/workflows/${id}/draft`, {
         name,
         description,
         nodes: nodes.map((n) => ({ id: n.id, type: n.type, position: n.position, data: n.data })),
         edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle })),
-      }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workflow", id] }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workflow", id] });
+      setStatus("saved", "Bozza salvata");
+    },
+    onError: () => setStatus("error", "Errore nel salvataggio della bozza"),
   });
 
   const publishMutation = useMutation({

@@ -1,9 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { HashRouter } from "react-router-dom";
-import { ThemeProvider, CssBaseline } from "@mui/material";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { theme } from "./theme";
+import { ThemeModeProvider } from "./contexts/ThemeModeContext";
+import { I18nProvider } from "./i18n";
 import { App } from "./App";
 import "./index.css";
 
@@ -13,13 +13,14 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <QueryClientProvider client={queryClient}>
-        <HashRouter>
-          <App />
-        </HashRouter>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <I18nProvider>
+      <ThemeModeProvider>
+        <QueryClientProvider client={queryClient}>
+          <HashRouter>
+            <App />
+          </HashRouter>
+        </QueryClientProvider>
+      </ThemeModeProvider>
+    </I18nProvider>
   </React.StrictMode>
 );
