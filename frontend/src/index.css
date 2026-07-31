@@ -127,6 +127,38 @@ code,
   box-shadow: 0 0 0 2px var(--signal-amber);
 }
 
+@keyframes step-dot-blink {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232, 163, 61, 0.55); }
+  50% { box-shadow: 0 0 0 6px rgba(232, 163, 61, 0); }
+}
+
+.step-dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid transparent;
+  flex-shrink: 0;
+}
+
+.step-dot.done { background: var(--verdigris); color: var(--ink-navy); }
+.step-dot.active { background: var(--signal-amber); color: var(--ink-navy); animation: step-dot-blink 1.4s infinite; }
+.step-dot.rejected { background: var(--rust); color: var(--chalk); }
+.step-dot.pending { background: transparent; color: rgba(242,246,245,0.5); border-color: rgba(242,246,245,0.3); }
+
+.step-dot-connector {
+  height: 2px;
+  flex: 1;
+  background: rgba(127,184,217,0.25);
+  min-width: 16px;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

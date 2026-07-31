@@ -46,6 +46,7 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/instances\/([^/]+)\/comments$/, action: "instances.comment", extract: (m) => ({ instanceId: m[1] }) },
 
   { pattern: /^\/dashboard\/kpi$/, action: "dashboard.kpi" },
+  { pattern: /^\/companies\/users$/, action: "companies.users" },
 ];
 
 function resolveAction(method: "get" | "post" | "put", url: string): string {

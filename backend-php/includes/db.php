@@ -7,7 +7,12 @@ function db(): PDO
     static $pdo = null;
     if ($pdo !== null) return $pdo;
 
-    $dbPath = __DIR__ . '/../data/flowsphere.sqlite';
+    $dataDir = __DIR__ . '/../data';
+    if (!is_dir($dataDir)) {
+        mkdir($dataDir, 0755, true);
+    }
+
+    $dbPath = $dataDir . '/flowsphere.sqlite';
     $isNew = !file_exists($dbPath);
 
     $pdo = new PDO('sqlite:' . $dbPath);

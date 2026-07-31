@@ -53,6 +53,11 @@ function DesignerInner() {
     enabled: !!id,
   });
 
+  const { data: companyUsers } = useQuery({
+    queryKey: ["company-users"],
+    queryFn: async () => (await api.get("/companies/users")).data,
+  });
+
   useEffect(() => {
     if (!workflow) return;
     setName(workflow.name);
@@ -213,6 +218,14 @@ function DesignerInner() {
               onChange={(e) => updateSelected((d) => ({ ...d, label: e.target.value }))}
             />
 
+            {["form", "upload", "approval", "ai"].includes(selectedNode.type ?? "") && (
+              <ResponsibleUsersEditor
+                users={companyUsers ?? []}
+                selected={selectedNode.data.config?.responsibleUserIds ?? []}
+                onChange={(ids) => updateSelected((d) => ({ ...d, config: { ...d.config, responsibleUserIds: ids } }))}
+              />
+            )}
+
             {selectedNode.type === "form" && (
               <FormFieldsEditor
                 fields={selectedNode.data.config?.fields ?? []}
@@ -246,6 +259,47 @@ function DesignerInner() {
         )}
       </Box>
     </Box>
+  );
+}
+
+function ResponsibleUsersEditor({
+  users,
+  selected,
+  onChange,
+}: {
+  users: { id: string; fullName: string; role: string }[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  return (
+    <Stack spacing={0.5}>
+      <Typography variant="caption" color="text.secondary">
+        Responsabili (chi puo' agire su questo step)
+      </Typography>
+      <TextField
+        select
+        size="small"
+        SelectProps={{
+          multiple: true,
+          value: selected,
+          onChange: (e) => onChange(e.target.value as string[]),
+          renderValue: (value) =>
+            (value as string[]).map((id) => users.find((u) => u.id === id)?.fullName ?? id).join(", "),
+        }}
+        value={selected}
+      >
+        {users.map((u) => (
+          <MenuItem key={u.id} value={u.id}>
+            {u.fullName} — {u.role}
+          </MenuItem>
+        ))}
+      </TextField>
+      <Typography variant="caption" color="text.secondary">
+        {selected.length === 0
+          ? "Nessuno assegnato: potranno agire Amministratore/Supervisore (o chi ha creato l'istanza, per i passi di raccolta dati)."
+          : `${selected.length} responsabile/i assegnato/i.`}
+      </Typography>
+    </Stack>
   );
 }
 

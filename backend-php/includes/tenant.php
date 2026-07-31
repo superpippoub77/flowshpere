@@ -28,3 +28,23 @@ function require_role(string $roleKey, array $allowed): void
     if ($roleKey === 'SUPER_ADMIN' || in_array($roleKey, $allowed, true)) return;
     error_response('Permessi insufficienti per questa azione', 403);
 }
+
+// Verifica se l'utente puo' agire su un determinato step del workflow.
+// Il Supervisore (e il Super Amministratore) possono sempre agire su tutto.
+// Se il nodo ha responsabili assegnati, solo loro possono agire. Se non ne
+// ha: sui passi di raccolta dati (form/upload) puo' agire anche chi ha
+// creato l'istanza, sui passi di decisione (approvazione/AI) serve ADMIN.
+function can_act_on_node(array $node, string $userId, string $roleKey, ?string $creatorId = null): bool
+{
+    if ($roleKey === 'SUPERVISOR' || $roleKey === 'SUPER_ADMIN') return true;
+
+    $responsibleIds = $node['data']['config']['responsibleUserIds'] ?? [];
+    if (!empty($responsibleIds)) {
+        return in_array($userId, $responsibleIds, true);
+    }
+
+    if (in_array($node['type'], ['form', 'upload'], true)) {
+        return $roleKey === 'ADMIN' || ($creatorId !== null && $userId === $creatorId);
+    }
+    return $roleKey === 'ADMIN';
+}

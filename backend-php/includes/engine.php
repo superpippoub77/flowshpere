@@ -15,6 +15,62 @@ function find_outgoing(array $edges, string $nodeId, ?string $handle = null): ?a
     return null;
 }
 
+// Trova l'arco che porta AL nodo indicato (per tornare al passo precedente in caso di rifiuto)
+function find_incoming(array $edges, string $nodeId): ?array
+{
+    foreach ($edges as $e) {
+        if ($e['target'] === $nodeId) return $e;
+    }
+    return null;
+}
+
+// In caso di rifiuto: non si va avanti, si torna al passo precedente
+// REALMENTE azionabile da un umano (form/upload/approval/ai) e lo si riapre
+// per una nuova iterazione. Se nel mezzo ci sono nodi automatici (decisione
+// automatica, email, webhook, commento) li salta, perche' nessuno puo'
+// "risolverli" manualmente: verranno ricalcolati da soli quando il flusso
+// ripassera' di li'.
+function send_back(string $instanceId): void
+{
+    $stmt = db()->prepare('
+        SELECT wi.current_node_id, wv.nodes_json, wv.edges_json
+        FROM workflow_instances wi
+        JOIN workflow_versions wv ON wv.id = wi.workflow_version_id
+        WHERE wi.id = ?
+    ');
+    $stmt->execute([$instanceId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row || !$row['current_node_id']) return;
+
+    $edges = json_decode($row['edges_json'], true);
+    $nodes = json_decode($row['nodes_json'], true);
+    $findNode = function (string $id) use ($nodes) {
+        foreach ($nodes as $n) if ($n['id'] === $id) return $n;
+        return null;
+    };
+
+    $actionable = ['form', 'upload', 'approval', 'ai'];
+    $cursor = $row['current_node_id'];
+    $guard = 0;
+    $prevNode = null;
+
+    while ($guard < 50) {
+        $guard++;
+        $incoming = find_incoming($edges, $cursor);
+        if (!$incoming) break;
+        $candidate = $findNode($incoming['source']);
+        if (!$candidate) break;
+        if (in_array($candidate['type'], $actionable, true)) { $prevNode = $candidate; break; }
+        $cursor = $candidate['id'];
+    }
+
+    if (!$prevNode) return;
+
+    ensure_task($instanceId, $prevNode);
+    $status = $prevNode['type'] === 'form' ? 'IN_CORSO' : 'IN_ATTESA';
+    set_current_node($instanceId, $prevNode['id'], $status);
+}
+
 function evaluate_rule(?array $rule, array $data): bool
 {
     if (empty($rule['field'])) return true;
@@ -32,10 +88,14 @@ function evaluate_rule(?array $rule, array $data): bool
 
 function ensure_task(string $instanceId, array $node): void
 {
-    $stmt = db()->prepare('SELECT id FROM workflow_tasks WHERE instance_id = ? AND node_id = ?');
+    // Se esiste gia' un task APERTO per questo nodo, non farne un altro.
+    $stmt = db()->prepare('SELECT id FROM workflow_tasks WHERE instance_id = ? AND node_id = ? AND status = "APERTO"');
     $stmt->execute([$instanceId, $node['id']]);
     if ($stmt->fetch()) return;
 
+    // Altrimenti crea sempre un nuovo task (anche se il nodo era gia' stato
+    // completato in un passaggio precedente): serve per gestire i ritorni
+    // indietro dopo un rifiuto, mantenendo la storia dei tentativi passati.
     db()->prepare('
         INSERT INTO workflow_tasks (id, instance_id, node_id, node_type, node_label, status)
         VALUES (?, ?, ?, ?, ?, "APERTO")

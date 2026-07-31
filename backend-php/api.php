@@ -1,10 +1,4 @@
 <?php
-// DIAGNOSTICA TEMPORANEA: mostra l'errore reale invece del generico 500.
-// Rimuovere queste due righe una volta risolto il problema (non lasciarle
-// attive in produzione).
-error_reporting(E_ALL);
-ini_set('display_errors', '1');
-
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/includes/auth.php';
@@ -41,12 +35,12 @@ switch ($action) {
             $apps = db()->query('SELECT * FROM applications WHERE enabled = 1')->fetchAll(PDO::FETCH_ASSOC);
             $appList = array_map(fn($a) => ['key' => $a['app_key'], 'name' => $a['name']], $apps);
             json_response(array_map(fn($c) => [
-                'id' => $c['id'], 'name' => $c['name'], 'role' => 'Super Amministratore', 'applications' => $appList,
+                'id' => $c['id'], 'name' => $c['name'], 'role' => 'Super Amministratore', 'roleKey' => 'SUPER_ADMIN', 'applications' => $appList,
             ], $companies));
         }
 
         $stmt = db()->prepare('
-            SELECT uc.id as uc_id, c.id as c_id, c.name as c_name, r.name as r_name
+            SELECT uc.id as uc_id, c.id as c_id, c.name as c_name, r.name as r_name, r.role_key as r_key
             FROM user_companies uc
             JOIN companies c ON c.id = uc.company_id
             JOIN roles r ON r.id = uc.role_id
@@ -68,6 +62,7 @@ switch ($action) {
                 'id' => $m['c_id'],
                 'name' => $m['c_name'],
                 'role' => $m['r_name'],
+                'roleKey' => $m['r_key'],
                 'applications' => array_map(fn($a) => ['key' => $a['app_key'], 'name' => $a['name']], $apps),
             ];
         }
@@ -244,13 +239,20 @@ switch ($action) {
         $ctx = require_company($user, $input['companyId'] ?? null);
         $instance = fetch_instance_row($input['instanceId'], $ctx['companyId']);
 
-        $data = array_merge(json_decode($instance['data_json'], true) ?: [], $input['values'] ?? []);
-        db()->prepare('UPDATE workflow_instances SET data_json = ? WHERE id = ?')->execute([json_encode($data), $instance['id']]);
-
         $taskStmt = db()->prepare('SELECT * FROM workflow_tasks WHERE id = ?');
         $taskStmt->execute([$input['taskId']]);
         $task = $taskStmt->fetch(PDO::FETCH_ASSOC);
-        db()->prepare('UPDATE workflow_tasks SET status = "COMPLETATO", resolved_at = datetime("now") WHERE id = ?')->execute([$input['taskId']]);
+        if (!$task) error_response('Attivita\' non trovata', 404);
+
+        $node = find_node_in_instance($instance['id'], $task['node_id']);
+        if (!$node || !can_act_on_node($node, $user['id'], $ctx['roleKey'], $instance['created_by_id'])) {
+            error_response('Non sei tra i responsabili di questo passaggio', 403);
+        }
+
+        $data = array_merge(json_decode($instance['data_json'], true) ?: [], $input['values'] ?? []);
+        db()->prepare('UPDATE workflow_instances SET data_json = ? WHERE id = ?')->execute([json_encode($data), $instance['id']]);
+        db()->prepare('UPDATE workflow_tasks SET status = "COMPLETATO", resolved_at = datetime("now"), assigned_to_id = ? WHERE id = ?')
+            ->execute([$user['id'], $input['taskId']]);
 
         log_audit($ctx['companyId'], $user['id'], $instance['id'], 'Form compilato', null, $input['values'] ?? []);
         advance_from($instance['id'], $task['node_id'], null);
@@ -258,21 +260,35 @@ switch ($action) {
         break;
 
     case 'instances.decision':
-        require_fields($input, ['instanceId', 'taskId', 'decision']);
+        require_fields($input, ['instanceId', 'taskId', 'decision', 'comment']);
         $ctx = require_company($user, $input['companyId'] ?? null);
         $instance = fetch_instance_row($input['instanceId'], $ctx['companyId']);
+
+        $taskStmt = db()->prepare('SELECT * FROM workflow_tasks WHERE id = ?');
+        $taskStmt->execute([$input['taskId']]);
+        $task = $taskStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$task) error_response('Attivita\' non trovata', 404);
+
+        $node = find_node_in_instance($instance['id'], $task['node_id']);
+        if (!$node || !can_act_on_node($node, $user['id'], $ctx['roleKey'], $instance['created_by_id'])) {
+            error_response('Non sei tra i responsabili di questo passaggio', 403);
+        }
 
         $decision = $input['decision'] === 'approve' ? 'approve' : 'reject';
         $newStatus = $decision === 'approve' ? 'APPROVATO' : 'RIFIUTATO';
         db()->prepare('UPDATE workflow_tasks SET status = ?, resolved_at = datetime("now"), assigned_to_id = ? WHERE id = ?')
             ->execute([$newStatus, $user['id'], $input['taskId']]);
 
-        $taskStmt = db()->prepare('SELECT * FROM workflow_tasks WHERE id = ?');
-        $taskStmt->execute([$input['taskId']]);
-        $task = $taskStmt->fetch(PDO::FETCH_ASSOC);
+        db()->prepare('INSERT INTO workflow_comments (id, instance_id, author_id, body) VALUES (?, ?, ?, ?)')
+            ->execute([new_id('cmt'), $instance['id'], $user['id'], $input['comment']]);
 
-        log_audit($ctx['companyId'], $user['id'], $instance['id'], 'Decisione "' . $task['node_label'] . '": ' . ($decision === 'approve' ? 'Approvato' : 'Rifiutato'));
-        advance_from($instance['id'], $task['node_id'], $decision);
+        log_audit($ctx['companyId'], $user['id'], $instance['id'], 'Decisione "' . $task['node_label'] . '": ' . ($decision === 'approve' ? 'Approvato' : 'Rifiutato') . ' — ' . $input['comment']);
+
+        if ($decision === 'approve') {
+            advance_from($instance['id'], $task['node_id'], 'approve');
+        } else {
+            send_back($instance['id']);
+        }
         json_response(['ok' => true]);
         break;
 
@@ -281,11 +297,18 @@ switch ($action) {
         $ctx = require_company($user, $input['companyId'] ?? null);
         $instance = fetch_instance_row($input['instanceId'], $ctx['companyId']);
 
-        db()->prepare('UPDATE workflow_tasks SET status = "COMPLETATO", resolved_at = datetime("now"), assigned_to_id = ? WHERE id = ?')
-            ->execute([$user['id'], $input['taskId']]);
         $taskStmt = db()->prepare('SELECT * FROM workflow_tasks WHERE id = ?');
         $taskStmt->execute([$input['taskId']]);
         $task = $taskStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$task) error_response('Attivita\' non trovata', 404);
+
+        $node = find_node_in_instance($instance['id'], $task['node_id']);
+        if (!$node || !can_act_on_node($node, $user['id'], $ctx['roleKey'], $instance['created_by_id'])) {
+            error_response('Non sei tra i responsabili di questo passaggio', 403);
+        }
+
+        db()->prepare('UPDATE workflow_tasks SET status = "COMPLETATO", resolved_at = datetime("now"), assigned_to_id = ? WHERE id = ?')
+            ->execute([$user['id'], $input['taskId']]);
 
         log_audit($ctx['companyId'], $user['id'], $instance['id'], 'Attivita\' completata: "' . $task['node_label'] . '"');
         advance_from($instance['id'], $task['node_id'], null);
@@ -301,6 +324,20 @@ switch ($action) {
             ->execute([new_id('cmt'), $instance['id'], $user['id'], $input['body']]);
         log_audit($ctx['companyId'], $user['id'], $instance['id'], 'Commento aggiunto');
         json_response(['ok' => true], 201);
+        break;
+
+    case 'companies.users':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        $stmt = db()->prepare('
+            SELECT u.id, u.full_name, u.email, r.name as role_name FROM user_companies uc
+            JOIN users u ON u.id = uc.user_id
+            JOIN roles r ON r.id = uc.role_id
+            WHERE uc.company_id = ? ORDER BY u.full_name
+        ');
+        $stmt->execute([$ctx['companyId']]);
+        json_response(array_map(fn($u) => [
+            'id' => $u['id'], 'fullName' => $u['full_name'], 'email' => $u['email'], 'role' => $u['role_name'],
+        ], $stmt->fetchAll(PDO::FETCH_ASSOC)));
         break;
 
     // ---------------- DASHBOARD ----------------
@@ -329,6 +366,21 @@ function fetch_instance_row(string $id, string $companyId): array
     return $row;
 }
 
+function find_node_in_instance(string $instanceId, string $nodeId): ?array
+{
+    $stmt = db()->prepare('
+        SELECT wv.nodes_json FROM workflow_instances wi
+        JOIN workflow_versions wv ON wv.id = wi.workflow_version_id
+        WHERE wi.id = ?
+    ');
+    $stmt->execute([$instanceId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return null;
+    $nodes = json_decode($row['nodes_json'], true);
+    foreach ($nodes as $n) if ($n['id'] === $nodeId) return $n;
+    return null;
+}
+
 function fetch_instance_detail(string $id, string $companyId): array
 {
     $instance = fetch_instance_row($id, $companyId);
@@ -350,6 +402,7 @@ function fetch_instance_detail(string $id, string $companyId): array
     $tasks = array_map(fn($t) => [
         'id' => $t['id'], 'nodeId' => $t['node_id'], 'nodeType' => $t['node_type'], 'nodeLabel' => $t['node_label'],
         'status' => $t['status'], 'assignedTo' => $t['assigned_name'] ? ['fullName' => $t['assigned_name']] : null,
+        'createdAt' => $t['created_at'], 'resolvedAt' => $t['resolved_at'],
     ], $tStmt->fetchAll(PDO::FETCH_ASSOC));
 
     $cStmt = db()->prepare('
@@ -383,7 +436,7 @@ function fetch_instance_detail(string $id, string $companyId): array
 
     return [
         'id' => $instance['id'], 'code' => $instance['code'], 'status' => $instance['status'],
-        'currentNodeId' => $instance['current_node_id'],
+        'currentNodeId' => $instance['current_node_id'], 'createdById' => $instance['created_by_id'],
         'workflow' => ['id' => $workflow['id'], 'name' => $workflow['name']],
         'workflowVersion' => ['nodesJson' => $version['nodes_json'], 'edgesJson' => $version['edges_json']],
         'tasks' => $tasks, 'comments' => $comments, 'aiDecisions' => $aiDecisions, 'auditLogs' => $auditLogs,

@@ -58,6 +58,7 @@ $usersDef = [
     ['supervisore@demo.it', 'Sara Supervisore', 'SUPERVISOR'],
     ['operatore@demo.it', 'Omar Operatore', 'OPERATOR'],
 ];
+$userIdByRole = [];
 foreach ($usersDef as [$email, $fullName, $roleKey]) {
     $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ?');
     $stmt->execute([$email]);
@@ -67,6 +68,7 @@ foreach ($usersDef as [$email, $fullName, $roleKey]) {
         $userId = new_id('user');
         $pdo->prepare('INSERT INTO users (id, email, password_hash, full_name) VALUES (?, ?, ?, ?)')->execute([$userId, $email, $passwordHash, $fullName]);
     }
+    $userIdByRole[$roleKey] = $userId;
 
     $stmt = $pdo->prepare('SELECT id FROM user_companies WHERE user_id = ? AND company_id = ?');
     $stmt->execute([$userId, $companyId]);
@@ -104,7 +106,7 @@ if (!$stmt->fetch()) {
             ['id' => 'descrizione', 'label' => 'Descrizione', 'type' => 'textarea'],
         ]]]],
         ['id' => 'n3', 'type' => 'autoDecision', 'position' => ['x' => 0, 'y' => 240], 'data' => ['label' => 'Importo > 1000€?', 'config' => ['rule' => ['field' => 'importo', 'operator' => 'gt', 'value' => 1000]]]],
-        ['id' => 'n4', 'type' => 'approval', 'position' => ['x' => -150, 'y' => 360], 'data' => ['label' => 'Approvazione Responsabile']],
+        ['id' => 'n4', 'type' => 'approval', 'position' => ['x' => -150, 'y' => 360], 'data' => ['label' => 'Approvazione Responsabile', 'config' => ['responsibleUserIds' => [$userIdByRole['ADMIN']]]]],
         ['id' => 'n5', 'type' => 'email', 'position' => ['x' => 0, 'y' => 480], 'data' => ['label' => 'Notifica esito', 'config' => ['template' => "La tua richiesta di acquisto e' stata elaborata."]]],
         ['id' => 'n6', 'type' => 'end', 'position' => ['x' => 0, 'y' => 600], 'data' => ['label' => 'Fine Processo']],
     ];

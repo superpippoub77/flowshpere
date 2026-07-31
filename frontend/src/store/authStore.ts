@@ -4,6 +4,7 @@ export interface CompanyOption {
   id: string;
   name: string;
   role: string;
+  roleKey: string;
   applications: { key: string; name: string }[];
 }
 
