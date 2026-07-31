@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -16,14 +16,18 @@ import {
   DialogActions,
   Alert,
   Drawer,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import CancelIcon from "@mui/icons-material/Cancel";
 import dayjs from "dayjs";
 import { api } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
-import { StepDots, computeMainSequence, computeStepStatuses, FlowNode } from "./StepDots";
+import { computeMainSequence, FlowNode } from "./StepDots";
 import { RichTextEditor } from "./RichTextEditor";
 import { AttachmentDropzone } from "./AttachmentDropzone";
 
@@ -45,7 +49,15 @@ function canActOnNode(node: FlowNode, userId: string, roleKey: string, creatorId
   return roleKey === "ADMIN";
 }
 
-export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | null; onClose: () => void }) {
+export function InstanceDrawer({
+  instanceId,
+  onClose,
+  initialNodeId,
+}: {
+  instanceId: string | null;
+  onClose: () => void;
+  initialNodeId?: string | null;
+}) {
   const queryClient = useQueryClient();
   const [comment, setComment] = useState("");
   const [stepComment, setStepComment] = useState("");
@@ -122,21 +134,6 @@ export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | n
   const nodes: FlowNode[] = useMemo(() => (instance ? JSON.parse(instance.workflowVersion.nodesJson) : []), [instance]);
   const edges = useMemo(() => (instance ? JSON.parse(instance.workflowVersion.edgesJson) : []), [instance]);
   const sequence = useMemo(() => computeMainSequence(nodes, edges), [nodes, edges]);
-  const statuses = useMemo(
-    () => (instance ? computeStepStatuses(sequence, instance.tasks, instance.currentNodeId, instance.status) : []),
-    [sequence, instance]
-  );
-
-  const badges = useMemo(
-    () =>
-      instance
-        ? sequence.map((n) => ({
-            hasComment: instance.comments.some((c: any) => c.nodeId === n.id),
-            hasAttachment: instance.attachments.some((a: any) => a.nodeId === n.id),
-          }))
-        : [],
-    [sequence, instance]
-  );
 
   function openStep(node: FlowNode, index: number) {
     setFormValues({});
@@ -144,6 +141,15 @@ export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | n
     setStepComment("");
     setDialogNode({ node, index });
   }
+
+  useEffect(() => {
+    if (instance && initialNodeId) {
+      const idx = sequence.findIndex((n) => n.id === initialNodeId);
+      const node = sequence[idx];
+      if (node) openStep(node, idx);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instance?.id, initialNodeId]);
 
   const dialogIsActive = dialogNode && instance && instance.currentNodeId === dialogNode.node.id;
   const dialogTasks = dialogNode && instance ? instance.tasks.filter((t: any) => t.nodeId === dialogNode.node.id) : [];
@@ -173,13 +179,6 @@ export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | n
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {instance.workflow.name}
           </Typography>
-
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Typography variant="overline" color="text.secondary" sx={{ px: 0.5 }}>
-              Andamento del processo
-            </Typography>
-            <StepDots sequence={sequence} statuses={statuses} onSelect={openStep} badges={badges} />
-          </Paper>
 
           <Paper sx={{ p: 2, mb: 2 }}>
             <Typography variant="overline" color="text.secondary">
@@ -300,47 +299,55 @@ export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | n
 
                   <Divider sx={{ mb: 2 }} />
 
-                  <Typography variant="overline" color="text.secondary">
-                    Commenti su questo passo
-                  </Typography>
-                  <Stack spacing={1} sx={{ mt: 1, mb: 1.5 }}>
-                    {stepComments.map((c: any) => (
-                      <Box key={c.id} sx={{ borderLeft: "2px solid rgba(127,184,217,0.3)", pl: 1.5 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {c.author.fullName} · {dayjs(c.createdAt).format("DD/MM HH:mm")}
-                        </Typography>
-                        <Box sx={{ fontSize: 14 }} dangerouslySetInnerHTML={{ __html: c.body }} />
-                      </Box>
-                    ))}
-                    {stepComments.length === 0 && (
-                      <Typography variant="body2" color="text.secondary">
-                        Nessun commento su questo passo.
+                  <Accordion disableGutters sx={{ mb: 1.5, "&:before": { display: "none" } }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="overline" color="text.secondary">
+                        Commenti su questo passo{stepComments.length > 0 ? ` (${stepComments.length})` : ""}
                       </Typography>
-                    )}
-                  </Stack>
-                  <RichTextEditor key={`comment-${dialogNode.node.id}`} value={stepComment} onChange={setStepComment} placeholder="Scrivi un commento su questo passo..." />
-                  <Button
-                    size="small"
-                    sx={{ mt: 1 }}
-                    disabled={!stepComment || stepCommentMutation.isPending}
-                    onClick={() => stepCommentMutation.mutate(dialogNode.node.id)}
-                  >
-                    Salva commento
-                  </Button>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Stack spacing={1} sx={{ mb: 1.5 }}>
+                        {stepComments.map((c: any) => (
+                          <Box key={c.id} sx={{ borderLeft: "2px solid rgba(127,184,217,0.3)", pl: 1.5 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              {c.author.fullName} · {dayjs(c.createdAt).format("DD/MM HH:mm")}
+                            </Typography>
+                            <Box sx={{ fontSize: 14 }} dangerouslySetInnerHTML={{ __html: c.body }} />
+                          </Box>
+                        ))}
+                        {stepComments.length === 0 && (
+                          <Typography variant="body2" color="text.secondary">
+                            Nessun commento su questo passo.
+                          </Typography>
+                        )}
+                      </Stack>
+                      <RichTextEditor key={`comment-${dialogNode.node.id}`} value={stepComment} onChange={setStepComment} placeholder="Scrivi un commento su questo passo..." />
+                      <Button
+                        size="small"
+                        sx={{ mt: 1 }}
+                        disabled={!stepComment || stepCommentMutation.isPending}
+                        onClick={() => stepCommentMutation.mutate(dialogNode.node.id)}
+                      >
+                        Salva commento
+                      </Button>
+                    </AccordionDetails>
+                  </Accordion>
 
-                  <Divider sx={{ my: 2 }} />
-
-                  <Typography variant="overline" color="text.secondary">
-                    Allegati di questo passo
-                  </Typography>
-                  <Box sx={{ mt: 1, mb: 2 }}>
-                    <AttachmentDropzone
-                      attachments={stepAttachments}
-                      companyId={currentCompanyId ?? ""}
-                      uploading={uploadMutation.isPending}
-                      onUpload={(file) => uploadMutation.mutate({ nodeId: dialogNode.node.id, ...file })}
-                    />
-                  </Box>
+                  <Accordion disableGutters sx={{ mb: 2, "&:before": { display: "none" } }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="overline" color="text.secondary">
+                        Allegati di questo passo{stepAttachments.length > 0 ? ` (${stepAttachments.length})` : ""}
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <AttachmentDropzone
+                        attachments={stepAttachments}
+                        companyId={currentCompanyId ?? ""}
+                        uploading={uploadMutation.isPending}
+                        onUpload={(file) => uploadMutation.mutate({ nodeId: dialogNode.node.id, ...file })}
+                      />
+                    </AccordionDetails>
+                  </Accordion>
 
                   <Divider sx={{ mb: 2 }} />
 

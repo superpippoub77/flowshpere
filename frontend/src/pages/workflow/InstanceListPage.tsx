@@ -41,7 +41,7 @@ const STATUS_COLOR: Record<string, any> = {
 
 const STATUS_OPTIONS = ["BOZZA", "IN_CORSO", "IN_ATTESA", "APPROVATO", "RIFIUTATO", "COMPLETATO", "ANNULLATO"];
 
-function InlineSteps({ item }: { item: any }) {
+function InlineSteps({ item, onSelect }: { item: any; onSelect: (nodeId: string) => void }) {
   const nodes = useMemo(() => JSON.parse(item.nodesJson), [item.nodesJson]);
   const edges = useMemo(() => JSON.parse(item.edgesJson), [item.edgesJson]);
   const sequence = useMemo(() => computeMainSequence(nodes, edges), [nodes, edges]);
@@ -57,7 +57,7 @@ function InlineSteps({ item }: { item: any }) {
       }),
     [sequence, item]
   );
-  return <StepDots sequence={sequence} statuses={statuses} compact badges={badges} />;
+  return <StepDots sequence={sequence} statuses={statuses} badges={badges} onSelect={(node) => onSelect(node.id)} />;
 }
 
 export function InstanceListPage() {
@@ -65,6 +65,7 @@ export function InstanceListPage() {
   const [open, setOpen] = useState(false);
   const [workflowId, setWorkflowId] = useState("");
   const [drawerInstanceId, setDrawerInstanceId] = useState<string | null>(null);
+  const [initialNodeId, setInitialNodeId] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({ code: "", workflowId: "", status: "", anagrafica: "", dateFrom: "", dateTo: "" });
@@ -93,6 +94,7 @@ export function InstanceListPage() {
     onSuccess: (instance) => {
       queryClient.invalidateQueries({ queryKey: ["instances"] });
       setOpen(false);
+      setInitialNodeId(null);
       setDrawerInstanceId(instance.id);
     },
   });
@@ -191,12 +193,24 @@ export function InstanceListPage() {
                 <TableCell>
                   <Chip size="small" label={inst.status} color={STATUS_COLOR[inst.status]} />
                 </TableCell>
-                <TableCell sx={{ minWidth: 140 }}>
-                  <InlineSteps item={inst} />
+                <TableCell sx={{ minWidth: 220 }}>
+                  <InlineSteps
+                    item={inst}
+                    onSelect={(nodeId) => {
+                      setInitialNodeId(nodeId);
+                      setDrawerInstanceId(inst.id);
+                    }}
+                  />
                 </TableCell>
                 <TableCell>{dayjs(inst.createdAt).format("DD/MM/YYYY HH:mm")}</TableCell>
                 <TableCell align="right">
-                  <IconButton size="small" onClick={() => setDrawerInstanceId(inst.id)}>
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setInitialNodeId(null);
+                      setDrawerInstanceId(inst.id);
+                    }}
+                  >
                     <TimelineIcon fontSize="small" />
                   </IconButton>
                 </TableCell>
@@ -240,7 +254,14 @@ export function InstanceListPage() {
         </DialogActions>
       </Dialog>
 
-      <InstanceDrawer instanceId={drawerInstanceId} onClose={() => setDrawerInstanceId(null)} />
+      <InstanceDrawer
+        instanceId={drawerInstanceId}
+        initialNodeId={initialNodeId}
+        onClose={() => {
+          setDrawerInstanceId(null);
+          setInitialNodeId(null);
+        }}
+      />
     </Box>
   );
 }
