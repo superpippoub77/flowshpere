@@ -51,6 +51,7 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/workflows\/([^/]+)$/, action: "workflows.get", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/workflows\/([^/]+)\/draft$/, action: "workflows.saveDraft", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/workflows\/([^/]+)\/publish$/, action: "workflows.publish", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/workflows\/([^/]+)\/company$/, action: "workflows.updateCompany", extract: (m) => ({ id: m[1] }) },
 
   { pattern: /^\/instances$/, action: "__instances_list_or_create__" },
   { pattern: /^\/instances\/([^/]+)$/, action: "instances.get", extract: (m) => ({ id: m[1] }) },

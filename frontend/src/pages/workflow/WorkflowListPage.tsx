@@ -19,8 +19,10 @@ import {
   DialogActions,
   TextField,
   MenuItem,
+  IconButton,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/EditOutlined";
 import { api } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 
@@ -40,6 +42,9 @@ export function WorkflowListPage() {
   const currentCompanyId = useAuthStore((s) => s.currentCompanyId);
   const setCurrentCompany = useAuthStore((s) => s.setCurrentCompany);
   const [targetCompanyId, setTargetCompanyId] = useState(currentCompanyId ?? "");
+  const user = useAuthStore((s) => s.user);
+  const [companyEditTarget, setCompanyEditTarget] = useState<{ id: string; companyId: string } | null>(null);
+  const [newCompanyId, setNewCompanyId] = useState("");
 
   const { data: workflows } = useQuery({
     queryKey: ["workflows"],
@@ -67,6 +72,14 @@ export function WorkflowListPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workflows"] }),
   });
 
+  const updateCompanyMutation = useMutation({
+    mutationFn: async () => api.post(`/workflows/${companyEditTarget!.id}/company`, { newCompanyId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+      setCompanyEditTarget(null);
+    },
+  });
+
   return (
     <Box sx={{ p: 3 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
@@ -86,6 +99,7 @@ export function WorkflowListPage() {
           <TableHead>
             <TableRow>
               <TableCell>Nome</TableCell>
+              <TableCell>Azienda</TableCell>
               <TableCell>Stato</TableCell>
               <TableCell>Versione</TableCell>
               <TableCell>Istanze</TableCell>
@@ -102,6 +116,22 @@ export function WorkflowListPage() {
                   <Typography variant="caption" color="text.secondary">
                     {w.description}
                   </Typography>
+                </TableCell>
+                <TableCell>
+                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <Typography variant="body2">{w.companyName ?? "—"}</Typography>
+                    {user?.isSuperAdmin && (
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setCompanyEditTarget({ id: w.id, companyId: w.companyId });
+                          setNewCompanyId(w.companyId);
+                        }}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Stack>
                 </TableCell>
                 <TableCell>
                   <Chip size="small" label={STATUS_LABEL[w.status]?.label ?? w.status} color={STATUS_LABEL[w.status]?.color} />
@@ -122,7 +152,7 @@ export function WorkflowListPage() {
             ))}
             {(workflows ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
                     Nessun workflow ancora creato.
                   </Typography>
@@ -161,6 +191,33 @@ export function WorkflowListPage() {
           <Button onClick={() => setOpenCreate(false)}>Annulla</Button>
           <Button variant="contained" disabled={!name || createMutation.isPending} onClick={() => createMutation.mutate()}>
             Crea e apri designer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!companyEditTarget} onClose={() => setCompanyEditTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Azienda del workflow</DialogTitle>
+        <DialogContent>
+          <TextField
+            select
+            label="Azienda"
+            value={newCompanyId}
+            onChange={(e) => setNewCompanyId(e.target.value)}
+            required
+            fullWidth
+            sx={{ mt: 1 }}
+          >
+            {companies.map((c) => (
+              <MenuItem key={c.id} value={c.id}>
+                {c.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCompanyEditTarget(null)}>Annulla</Button>
+          <Button variant="contained" disabled={!newCompanyId || updateCompanyMutation.isPending} onClick={() => updateCompanyMutation.mutate()}>
+            Salva
           </Button>
         </DialogActions>
       </Dialog>

@@ -135,7 +135,11 @@ switch ($action) {
 
     case 'workflows.list':
         $ctx = require_company($user, $input['companyId'] ?? null);
-        $stmt = db()->prepare('SELECT * FROM workflows WHERE company_id = ? ORDER BY updated_at DESC');
+        $stmt = db()->prepare('
+            SELECT w.*, c.name as company_name FROM workflows w
+            JOIN companies c ON c.id = w.company_id
+            WHERE w.company_id = ? ORDER BY w.updated_at DESC
+        ');
         $stmt->execute([$ctx['companyId']]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -153,6 +157,7 @@ switch ($action) {
                 'id' => $w['id'], 'name' => $w['name'], 'description' => $w['description'],
                 'status' => $w['status'], 'instanceCount' => (int) $count,
                 'latestVersion' => $latest ? (int) $latest : null, 'updatedAt' => $w['updated_at'],
+                'companyId' => $w['company_id'], 'companyName' => $w['company_name'],
             ];
         }
         json_response($out);
@@ -229,6 +234,20 @@ switch ($action) {
 
         db()->prepare('UPDATE workflows SET status = "PUBLISHED", updated_at = datetime("now") WHERE id = ?')->execute([$w['id']]);
         log_audit($ctx['companyId'], $user['id'], null, 'Workflow pubblicato: "' . $w['name'] . '"');
+        json_response(['ok' => true]);
+        break;
+
+    case 'workflows.updateCompany':
+        require_super_admin($user);
+        require_fields($input, ['id', 'newCompanyId']);
+        $stmt = db()->prepare('SELECT * FROM workflows WHERE id = ?');
+        $stmt->execute([$input['id']]);
+        $w = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$w) error_response('Workflow non trovato', 404);
+
+        db()->prepare('UPDATE workflows SET company_id = ?, updated_at = datetime("now") WHERE id = ?')
+            ->execute([$input['newCompanyId'], $input['id']]);
+        log_audit($input['newCompanyId'], $user['id'], null, 'Workflow "' . $w['name'] . '" spostato a questa azienda');
         json_response(['ok' => true]);
         break;
 
