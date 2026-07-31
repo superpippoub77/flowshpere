@@ -21,6 +21,8 @@ import {
   Pagination,
   Grid,
   IconButton,
+  ToggleButtonGroup,
+  ToggleButton,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import TimelineIcon from "@mui/icons-material/TimelineOutlined";
@@ -66,9 +68,10 @@ export function InstanceListPage() {
   const [workflowId, setWorkflowId] = useState("");
   const [drawerInstanceId, setDrawerInstanceId] = useState<string | null>(null);
   const [initialNodeId, setInitialNodeId] = useState<string | null>(null);
+  const [drawerVisible, setDrawerVisible] = useState(false);
 
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ code: "", workflowId: "", status: "", anagrafica: "", dateFrom: "", dateTo: "" });
+  const [filters, setFilters] = useState({ code: "", workflowId: "", status: "", anagrafica: "", dateFrom: "", dateTo: "", openClosed: "open" });
 
   function updateFilter(key: string, value: string) {
     setPage(1);
@@ -96,6 +99,7 @@ export function InstanceListPage() {
       setOpen(false);
       setInitialNodeId(null);
       setDrawerInstanceId(instance.id);
+      setDrawerVisible(true);
     },
   });
 
@@ -112,6 +116,18 @@ export function InstanceListPage() {
           Nuova istanza
         </Button>
       </Stack>
+
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={filters.openClosed}
+        onChange={(_, value) => value && updateFilter("openClosed", value)}
+        sx={{ mb: 2 }}
+      >
+        <ToggleButton value="open">Aperti</ToggleButton>
+        <ToggleButton value="closed">Chiusi</ToggleButton>
+        <ToggleButton value="all">Tutti</ToggleButton>
+      </ToggleButtonGroup>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={1.5}>
@@ -197,6 +213,7 @@ export function InstanceListPage() {
                   <InlineSteps
                     item={inst}
                     onSelect={(nodeId) => {
+                      setDrawerVisible(false);
                       setInitialNodeId(nodeId);
                       setDrawerInstanceId(inst.id);
                     }}
@@ -209,6 +226,7 @@ export function InstanceListPage() {
                     onClick={() => {
                       setInitialNodeId(null);
                       setDrawerInstanceId(inst.id);
+                      setDrawerVisible(true);
                     }}
                   >
                     <TimelineIcon fontSize="small" />
@@ -257,9 +275,11 @@ export function InstanceListPage() {
       <InstanceDrawer
         instanceId={drawerInstanceId}
         initialNodeId={initialNodeId}
+        drawerVisible={drawerVisible}
         onClose={() => {
           setDrawerInstanceId(null);
           setInitialNodeId(null);
+          setDrawerVisible(false);
         }}
       />
     </Box>

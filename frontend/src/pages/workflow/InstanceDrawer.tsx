@@ -53,14 +53,17 @@ export function InstanceDrawer({
   instanceId,
   onClose,
   initialNodeId,
+  drawerVisible,
 }: {
   instanceId: string | null;
   onClose: () => void;
   initialNodeId?: string | null;
+  drawerVisible?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [comment, setComment] = useState("");
   const [stepComment, setStepComment] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [decisionComment, setDecisionComment] = useState("");
   const [dialogNode, setDialogNode] = useState<{ node: FlowNode; index: number } | null>(null);
@@ -88,16 +91,20 @@ export function InstanceDrawer({
     onSuccess: () => {
       setDecisionComment("");
       setDialogNode(null);
+      setActionError(null);
       invalidate();
     },
+    onError: (err: any) => setActionError(err?.response?.data?.error || "Azione non riuscita"),
   });
 
   const completeMutation = useMutation({
     mutationFn: async (taskId: string) => api.post(`/instances/${instanceId}/tasks/${taskId}/complete`),
     onSuccess: () => {
       setDialogNode(null);
+      setActionError(null);
       invalidate();
     },
+    onError: (err: any) => setActionError(err?.response?.data?.error || "Azione non riuscita"),
   });
 
   const formMutation = useMutation({
@@ -105,8 +112,10 @@ export function InstanceDrawer({
     onSuccess: () => {
       setFormValues({});
       setDialogNode(null);
+      setActionError(null);
       invalidate();
     },
+    onError: (err: any) => setActionError(err?.response?.data?.error || "Azione non riuscita"),
   });
 
   const commentMutation = useMutation({
@@ -139,6 +148,7 @@ export function InstanceDrawer({
     setFormValues({});
     setDecisionComment("");
     setStepComment("");
+    setActionError(null);
     setDialogNode({ node, index });
   }
 
@@ -162,7 +172,7 @@ export function InstanceDrawer({
   const stepAttachments = dialogNode && instance ? instance.attachments.filter((a: any) => a.nodeId === dialogNode.node.id) : [];
 
   return (
-    <Drawer anchor="right" open={!!instanceId} onClose={onClose} PaperProps={{ sx: { width: 460 } }}>
+    <Drawer anchor="right" open={!!drawerVisible} onClose={onClose} PaperProps={{ sx: { width: 460 } }}>
       {instance && (
         <Box sx={{ p: 3, overflowY: "auto" }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
@@ -355,6 +365,12 @@ export function InstanceDrawer({
 
                   {dialogIsActive && !authorized && (
                     <Alert severity="warning">Non accessibile: non sei tra i responsabili di questo passaggio.</Alert>
+                  )}
+
+                  {actionError && (
+                    <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
+                      {actionError}
+                    </Alert>
                   )}
 
                   {dialogIsActive && authorized && openTask?.nodeType === "form" && (

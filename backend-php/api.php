@@ -240,6 +240,8 @@ switch ($action) {
         }
         if (!empty($input['workflowId'])) { $where[] = 'wi.workflow_id = ?'; $params[] = $input['workflowId']; }
         if (!empty($input['status'])) { $where[] = 'wi.status = ?'; $params[] = $input['status']; }
+        if (!empty($input['openClosed']) && $input['openClosed'] === 'open') { $where[] = "wi.status NOT IN ('COMPLETATO', 'ANNULLATO')"; }
+        if (!empty($input['openClosed']) && $input['openClosed'] === 'closed') { $where[] = "wi.status IN ('COMPLETATO', 'ANNULLATO')"; }
         if (!empty($input['code'])) { $where[] = 'wi.code LIKE ?'; $params[] = '%' . $input['code'] . '%'; }
         if (!empty($input['anagrafica'])) { $where[] = 'wi.data_json LIKE ?'; $params[] = '%' . $input['anagrafica'] . '%'; }
         if (!empty($input['dateFrom'])) { $where[] = 'date(wi.created_at) >= date(?)'; $params[] = $input['dateFrom']; }
