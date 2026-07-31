@@ -258,15 +258,11 @@ switch ($action) {
         $pageSize = 10;
         $page = max(1, (int) ($input['page'] ?? 1));
         $offset = ($page - 1) * $pageSize;
+        $isOperator = $ctx['roleKey'] === 'OPERATOR';
 
         $where = ['w.company_id = ?'];
         $params = [$ctx['companyId']];
 
-        if ($ctx['roleKey'] === 'OPERATOR') {
-            $where[] = '(wi.created_by_id = ? OR EXISTS (SELECT 1 FROM workflow_tasks t WHERE t.instance_id = wi.id AND t.assigned_to_id = ?))';
-            $params[] = $user['id'];
-            $params[] = $user['id'];
-        }
         if (!empty($input['workflowId'])) { $where[] = 'wi.workflow_id = ?'; $params[] = $input['workflowId']; }
         if (!empty($input['status'])) { $where[] = 'wi.status = ?'; $params[] = $input['status']; }
         if (!empty($input['openClosed']) && $input['openClosed'] === 'open') { $where[] = "wi.status NOT IN ('COMPLETATO', 'ANNULLATO')"; }
@@ -278,18 +274,44 @@ switch ($action) {
 
         $whereSql = implode(' AND ', $where);
 
-        $countStmt = db()->prepare("SELECT COUNT(*) as c FROM workflow_instances wi JOIN workflows w ON w.id = wi.workflow_id WHERE $whereSql");
-        $countStmt->execute($params);
-        $total = (int) $countStmt->fetch(PDO::FETCH_ASSOC)['c'];
-
         $stmt = db()->prepare("
             SELECT wi.*, w.name as workflow_name, wv.nodes_json, wv.edges_json FROM workflow_instances wi
             JOIN workflows w ON w.id = wi.workflow_id
             JOIN workflow_versions wv ON wv.id = wi.workflow_version_id
-            WHERE $whereSql ORDER BY wi.updated_at DESC LIMIT $pageSize OFFSET $offset
+            WHERE $whereSql ORDER BY wi.updated_at DESC
         ");
         $stmt->execute($params);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $allRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($isOperator) {
+            // Un operatore vede un'istanza se l'ha creata, se ha gia' risolto un
+            // passo in passato, OPPURE se il passo attualmente aperto lo ha tra
+            // i responsabili (anche se non ha ancora agito: prima doveva averlo
+            // gia' fatto per poterla vedere, il che non aveva senso).
+            $instanceIds = array_map(fn($r) => $r['id'], $allRows);
+            $resolvedByMe = [];
+            if (!empty($instanceIds)) {
+                $ph = implode(',', array_fill(0, count($instanceIds), '?'));
+                $rStmt = db()->prepare("SELECT DISTINCT instance_id FROM workflow_tasks WHERE assigned_to_id = ? AND instance_id IN ($ph)");
+                $rStmt->execute(array_merge([$user['id']], $instanceIds));
+                foreach ($rStmt->fetchAll(PDO::FETCH_ASSOC) as $r) $resolvedByMe[$r['instance_id']] = true;
+            }
+
+            $allRows = array_values(array_filter($allRows, function ($r) use ($user, $resolvedByMe) {
+                if ($r['created_by_id'] === $user['id']) return true;
+                if (isset($resolvedByMe[$r['id']])) return true;
+                if (!$r['current_node_id']) return false;
+                $nodes = json_decode($r['nodes_json'], true);
+                $node = null;
+                foreach ($nodes as $n) if ($n['id'] === $r['current_node_id']) { $node = $n; break; }
+                if (!$node) return false;
+                $responsibleIds = $node['data']['config']['responsibleUserIds'] ?? [];
+                return in_array($user['id'], $responsibleIds, true);
+            }));
+        }
+
+        $total = count($allRows);
+        $rows = array_slice($allRows, $offset, $pageSize);
 
         $ids = array_map(fn($r) => $r['id'], $rows);
         $tasksByInstance = [];
