@@ -19,10 +19,13 @@ import {
   TextField,
   MenuItem,
   IconButton,
+  Avatar,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
-import { api } from "../../api/client";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import { api, getAvatarUrl } from "../../api/client";
+import { AvatarPicker } from "../../components/AvatarPicker";
 
 const TYPE_LABEL: Record<string, { label: string; color: any }> = {
   SUPERADMIN: { label: "Super Amministratore", color: "error" },
@@ -30,27 +33,20 @@ const TYPE_LABEL: Record<string, { label: string; color: any }> = {
   UTENTE: { label: "Utente", color: "default" },
 };
 
-const emptyForm = { fullName: "", email: "", password: "", userType: "UTENTE" };
+const emptyForm = { fullName: "", email: "", password: "", userType: "UTENTE", phone: "", jobTitle: "", notes: "" };
 
 export function AdminUsersPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [avatar, setAvatar] = useState<{ base64: string; mimeType: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: users } = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => (await api.get("/admin/users")).data,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async () => api.post("/admin/users", form),
-    onSuccess: closeDialog,
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async () => api.put(`/admin/users/${editingId}`, form),
-    onSuccess: closeDialog,
   });
 
   function closeDialog() {
@@ -58,17 +54,42 @@ export function AdminUsersPage() {
     setOpen(false);
     setEditingId(null);
     setForm(emptyForm);
+    setAvatar(null);
   }
+
+  const avatarPayload = avatar ? { avatarBase64: avatar.base64, avatarMimeType: avatar.mimeType } : {};
+
+  const createMutation = useMutation({
+    mutationFn: async () => api.post("/admin/users", { ...form, ...avatarPayload }),
+    onSuccess: closeDialog,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async () => api.put(`/admin/users/${editingId}`, { ...form, ...avatarPayload }),
+    onSuccess: closeDialog,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => api.post(`/admin/users/${id}/delete`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      setDeleteTarget(null);
+      setDeleteError(null);
+    },
+    onError: (err: any) => setDeleteError(err?.response?.data?.error || "Impossibile eliminare l'utente"),
+  });
 
   function openCreate() {
     setEditingId(null);
     setForm(emptyForm);
+    setAvatar(null);
     setOpen(true);
   }
 
   function openEdit(u: any) {
     setEditingId(u.id);
-    setForm({ fullName: u.fullName, email: u.email, password: "", userType: u.userType });
+    setForm({ fullName: u.fullName, email: u.email, password: "", userType: u.userType, phone: u.phone ?? "", jobTitle: u.jobTitle ?? "", notes: "" });
+    setAvatar(null);
     setOpen(true);
   }
 
@@ -90,8 +111,10 @@ export function AdminUsersPage() {
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell></TableCell>
               <TableCell>Nome</TableCell>
               <TableCell>Email</TableCell>
+              <TableCell>Telefono / Ruolo</TableCell>
               <TableCell>Tipo</TableCell>
               <TableCell align="right">Azioni</TableCell>
             </TableRow>
@@ -99,14 +122,28 @@ export function AdminUsersPage() {
           <TableBody>
             {(users ?? []).map((u: any) => (
               <TableRow key={u.id} hover>
+                <TableCell width={48}>
+                  <Avatar src={u.hasAvatar ? getAvatarUrl(u.id) : undefined} sx={{ width: 32, height: 32, fontSize: 14 }}>
+                    {u.fullName?.[0]}
+                  </Avatar>
+                </TableCell>
                 <TableCell>{u.fullName}</TableCell>
                 <TableCell className="mono">{u.email}</TableCell>
+                <TableCell>
+                  <Typography variant="body2">{u.jobTitle || "—"}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {u.phone || ""}
+                  </Typography>
+                </TableCell>
                 <TableCell>
                   <Chip size="small" label={TYPE_LABEL[u.userType]?.label ?? u.userType} color={TYPE_LABEL[u.userType]?.color} />
                 </TableCell>
                 <TableCell align="right">
                   <IconButton size="small" onClick={() => openEdit(u)}>
                     <EditIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => { setDeleteTarget(u); setDeleteError(null); }}>
+                    <DeleteOutlineIcon fontSize="small" />
                   </IconButton>
                 </TableCell>
               </TableRow>
@@ -119,8 +156,16 @@ export function AdminUsersPage() {
         <DialogTitle>{editingId ? "Modifica utente" : "Nuovo utente"}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+            <AvatarPicker
+              currentUrl={editingId && users?.find((u: any) => u.id === editingId)?.hasAvatar ? getAvatarUrl(editingId) : undefined}
+              fallbackText={form.fullName?.[0] ?? "?"}
+              onPick={({ base64, mimeType }) => setAvatar({ base64, mimeType })}
+            />
             <TextField label="Nome completo" value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} fullWidth />
             <TextField label="Email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} fullWidth />
+            <TextField label="Telefono" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} fullWidth />
+            <TextField label="Ruolo / posizione" value={form.jobTitle} onChange={(e) => setForm((f) => ({ ...f, jobTitle: e.target.value }))} fullWidth />
+            <TextField label="Note" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} fullWidth multiline minRows={2} />
             <TextField
               label={editingId ? "Nuova password (lascia vuoto per non cambiarla)" : "Password"}
               type="password"
@@ -143,6 +188,26 @@ export function AdminUsersPage() {
             onClick={() => (editingId ? updateMutation.mutate() : createMutation.mutate())}
           >
             {editingId ? "Salva" : "Crea"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Elimina utente</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Eliminare definitivamente <strong>{deleteTarget?.fullName}</strong>? L'operazione non e' reversibile.
+          </Typography>
+          {deleteError && (
+            <Typography variant="body2" color="error" sx={{ mt: 1.5 }}>
+              {deleteError}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>Annulla</Button>
+          <Button variant="contained" color="error" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate(deleteTarget.id)}>
+            Elimina
           </Button>
         </DialogActions>
       </Dialog>

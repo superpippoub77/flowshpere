@@ -34,6 +34,13 @@ switch ($action) {
         $params = [];
         if (!empty($input['fullName'])) { $fields[] = 'full_name = ?'; $params[] = $input['fullName']; }
         if (!empty($input['password'])) { $fields[] = 'password_hash = ?'; $params[] = password_hash($input['password'], PASSWORD_DEFAULT); }
+        if (isset($input['phone'])) { $fields[] = 'phone = ?'; $params[] = $input['phone']; }
+        if (isset($input['jobTitle'])) { $fields[] = 'job_title = ?'; $params[] = $input['jobTitle']; }
+        if (isset($input['notes'])) { $fields[] = 'notes = ?'; $params[] = $input['notes']; }
+        if (!empty($input['avatarBase64'])) {
+            $avatarName = save_avatar($input['avatarBase64'], $input['avatarMimeType'] ?? 'image/jpeg');
+            if ($avatarName) { $fields[] = 'avatar_path = ?'; $params[] = $avatarName; }
+        }
         if (!empty($fields)) {
             $params[] = $user['id'];
             db()->prepare('UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
@@ -41,7 +48,10 @@ switch ($action) {
         $stmt = db()->prepare('SELECT * FROM users WHERE id = ?');
         $stmt->execute([$user['id']]);
         $u = $stmt->fetch(PDO::FETCH_ASSOC);
-        json_response(['id' => $u['id'], 'email' => $u['email'], 'fullName' => $u['full_name'], 'isSuperAdmin' => (bool) $u['is_super_admin']]);
+        json_response([
+            'id' => $u['id'], 'email' => $u['email'], 'fullName' => $u['full_name'], 'isSuperAdmin' => (bool) $u['is_super_admin'],
+            'phone' => $u['phone'], 'jobTitle' => $u['job_title'], 'notes' => $u['notes'], 'hasAvatar' => !empty($u['avatar_path']),
+        ]);
         break;
 
     case 'search.global':
@@ -517,10 +527,11 @@ switch ($action) {
 
     case 'admin.users.list':
         require_super_admin($user);
-        $rows = db()->query('SELECT id, email, full_name, user_type, is_super_admin FROM users ORDER BY full_name')->fetchAll(PDO::FETCH_ASSOC);
+        $rows = db()->query('SELECT id, email, full_name, user_type, is_super_admin, phone, job_title, avatar_path FROM users ORDER BY full_name')->fetchAll(PDO::FETCH_ASSOC);
         json_response(array_map(fn($u) => [
             'id' => $u['id'], 'email' => $u['email'], 'fullName' => $u['full_name'],
             'userType' => $u['user_type'], 'isSuperAdmin' => (bool) $u['is_super_admin'],
+            'phone' => $u['phone'], 'jobTitle' => $u['job_title'], 'hasAvatar' => !empty($u['avatar_path']),
         ], $rows));
         break;
 
@@ -533,9 +544,17 @@ switch ($action) {
         $stmt->execute([$input['email']]);
         if ($stmt->fetch()) error_response('Esiste gia\' un utente con questa email', 409);
 
+        $avatarName = !empty($input['avatarBase64']) ? save_avatar($input['avatarBase64'], $input['avatarMimeType'] ?? 'image/jpeg') : null;
+
         $newId = new_id('user');
-        db()->prepare('INSERT INTO users (id, email, password_hash, full_name, is_super_admin, user_type) VALUES (?, ?, ?, ?, ?, ?)')
-            ->execute([$newId, $input['email'], password_hash($input['password'], PASSWORD_DEFAULT), $input['fullName'], $userType === 'SUPERADMIN' ? 1 : 0, $userType]);
+        db()->prepare('
+            INSERT INTO users (id, email, password_hash, full_name, is_super_admin, user_type, phone, job_title, notes, avatar_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ')->execute([
+            $newId, $input['email'], password_hash($input['password'], PASSWORD_DEFAULT), $input['fullName'],
+            $userType === 'SUPERADMIN' ? 1 : 0, $userType,
+            $input['phone'] ?? null, $input['jobTitle'] ?? null, $input['notes'] ?? null, $avatarName,
+        ]);
         json_response(['id' => $newId], 201);
         break;
 
@@ -552,9 +571,37 @@ switch ($action) {
             $fields[] = 'is_super_admin = ?'; $params[] = $userType === 'SUPERADMIN' ? 1 : 0;
         }
         if (!empty($input['password'])) { $fields[] = 'password_hash = ?'; $params[] = password_hash($input['password'], PASSWORD_DEFAULT); }
+        if (isset($input['phone'])) { $fields[] = 'phone = ?'; $params[] = $input['phone']; }
+        if (isset($input['jobTitle'])) { $fields[] = 'job_title = ?'; $params[] = $input['jobTitle']; }
+        if (isset($input['notes'])) { $fields[] = 'notes = ?'; $params[] = $input['notes']; }
+        if (!empty($input['avatarBase64'])) {
+            $avatarName = save_avatar($input['avatarBase64'], $input['avatarMimeType'] ?? 'image/jpeg');
+            if ($avatarName) { $fields[] = 'avatar_path = ?'; $params[] = $avatarName; }
+        }
         if (empty($fields)) json_response(['ok' => true]);
         $params[] = $input['id'];
         db()->prepare('UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+        json_response(['ok' => true]);
+        break;
+
+    case 'admin.users.delete':
+        require_super_admin($user);
+        require_fields($input, ['id']);
+        if ($input['id'] === $user['id']) error_response('Non puoi eliminare il tuo stesso account', 400);
+
+        foreach (['workflow_instances' => 'created_by_id', 'workflow_comments' => 'author_id', 'attachments' => 'uploaded_by_id'] as $table => $col) {
+            $stmt = db()->prepare("SELECT COUNT(*) as c FROM $table WHERE $col = ?");
+            $stmt->execute([$input['id']]);
+            if ((int) $stmt->fetch(PDO::FETCH_ASSOC)['c'] > 0) {
+                error_response('Impossibile eliminare: l\'utente ha attivita\' collegate (istanze create, commenti o allegati). Rimuovi i suoi permessi invece.', 409);
+            }
+        }
+
+        db()->prepare('UPDATE workflow_tasks SET assigned_to_id = NULL WHERE assigned_to_id = ?')->execute([$input['id']]);
+        db()->prepare('UPDATE audit_logs SET user_id = NULL WHERE user_id = ?')->execute([$input['id']]);
+        db()->prepare('DELETE FROM user_company_applications WHERE user_company_id IN (SELECT id FROM user_companies WHERE user_id = ?)')->execute([$input['id']]);
+        db()->prepare('DELETE FROM user_companies WHERE user_id = ?')->execute([$input['id']]);
+        db()->prepare('DELETE FROM users WHERE id = ?')->execute([$input['id']]);
         json_response(['ok' => true]);
         break;
 
@@ -585,6 +632,21 @@ switch ($action) {
         require_super_admin($user);
         require_fields($input, ['id', 'name']);
         db()->prepare('UPDATE companies SET name = ? WHERE id = ?')->execute([$input['name'], $input['id']]);
+        json_response(['ok' => true]);
+        break;
+
+    case 'admin.companies.delete':
+        require_super_admin($user);
+        require_fields($input, ['id']);
+        $stmt = db()->prepare('SELECT COUNT(*) as c FROM workflows WHERE company_id = ?');
+        $stmt->execute([$input['id']]);
+        if ((int) $stmt->fetch(PDO::FETCH_ASSOC)['c'] > 0) {
+            error_response('Impossibile eliminare: l\'azienda ha workflow collegati.', 409);
+        }
+        db()->prepare('DELETE FROM user_company_applications WHERE user_company_id IN (SELECT id FROM user_companies WHERE company_id = ?)')->execute([$input['id']]);
+        db()->prepare('DELETE FROM user_companies WHERE company_id = ?')->execute([$input['id']]);
+        db()->prepare('DELETE FROM roles WHERE company_id = ?')->execute([$input['id']]);
+        db()->prepare('DELETE FROM companies WHERE id = ?')->execute([$input['id']]);
         json_response(['ok' => true]);
         break;
 

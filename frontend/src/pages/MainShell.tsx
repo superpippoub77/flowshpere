@@ -16,6 +16,7 @@ import {
   ListItemText,
   Divider,
   Menu,
+  Avatar,
 } from "@mui/material";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -36,7 +37,7 @@ import AccountCircleIcon from "@mui/icons-material/AccountCircleOutlined";
 import LightModeIcon from "@mui/icons-material/LightModeOutlined";
 import DarkModeIcon from "@mui/icons-material/DarkModeOutlined";
 import TranslateIcon from "@mui/icons-material/TranslateOutlined";
-import { api } from "../api/client";
+import { api, getAvatarUrl } from "../api/client";
 import { useAuthStore } from "../store/authStore";
 import { useThemeMode } from "../contexts/ThemeModeContext";
 import { useI18n } from "../i18n";
@@ -352,7 +353,11 @@ export function MainShell() {
 
             <Tooltip title={t("profile")}>
               <IconButton size="small" onClick={(e) => setProfileMenuAnchor(e.currentTarget)}>
-                <AccountCircleIcon fontSize="small" />
+                {user?.hasAvatar && user?.id ? (
+                  <Avatar src={getAvatarUrl(user.id)} sx={{ width: 22, height: 22 }} />
+                ) : (
+                  <AccountCircleIcon fontSize="small" />
+                )}
               </IconButton>
             </Tooltip>
             <Menu anchorEl={profileMenuAnchor} open={!!profileMenuAnchor} onClose={() => setProfileMenuAnchor(null)}>

@@ -26,6 +26,7 @@ function login_user(string $email, string $password): array
         'email' => $user['email'],
         'fullName' => $user['full_name'],
         'isSuperAdmin' => (bool) $user['is_super_admin'],
+        'hasAvatar' => !empty($user['avatar_path']),
     ];
 }
 

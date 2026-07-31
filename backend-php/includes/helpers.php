@@ -29,3 +29,20 @@ function require_fields(array $data, array $fields): void
         }
     }
 }
+
+// Salva un'immagine profilo (base64) su disco e ritorna il nome file da salvare in DB
+function save_avatar(string $dataBase64, string $mimeType): ?string
+{
+    $binary = base64_decode($dataBase64, true);
+    if ($binary === false || strlen($binary) > 2 * 1024 * 1024) return null;
+    $ext = 'jpg';
+    if (strpos($mimeType, 'png') !== false) $ext = 'png';
+    if (strpos($mimeType, 'webp') !== false) $ext = 'webp';
+    if (strpos($mimeType, 'gif') !== false) $ext = 'gif';
+
+    $dir = __DIR__ . '/../data/avatars';
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $name = new_id('avatar') . '.' . $ext;
+    file_put_contents($dir . '/' . $name, $binary);
+    return $name;
+}

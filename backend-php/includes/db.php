@@ -66,6 +66,12 @@ function run_migrations(PDO $pdo): void
         $pdo->exec("UPDATE applications SET enabled = 1 WHERE app_key IN ('timesheet', 'ticket', 'crm')");
     }
 
+    foreach (['avatar_path', 'phone', 'job_title', 'notes'] as $col) {
+        if (!$hasColumn('users', $col)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN $col TEXT");
+        }
+    }
+
     if (!$hasColumn('workflow_comments', 'node_id')) {
         $pdo->exec('ALTER TABLE workflow_comments ADD COLUMN node_id TEXT');
     }
@@ -140,6 +146,10 @@ function create_schema(PDO $pdo): void
             full_name TEXT NOT NULL,
             is_super_admin INTEGER NOT NULL DEFAULT 0,
             user_type TEXT NOT NULL DEFAULT 'UTENTE',
+            avatar_path TEXT,
+            phone TEXT,
+            job_title TEXT,
+            notes TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 

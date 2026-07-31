@@ -25,6 +25,12 @@ export function getAttachmentUrl(attachmentId: string, companyId: string): strin
   return `${path}api/download.php?id=${encodeURIComponent(attachmentId)}&companyId=${encodeURIComponent(companyId)}`;
 }
 
+export function getAvatarUrl(userId: string): string {
+  let path = window.location.pathname;
+  if (!path.endsWith("/")) path = path.substring(0, path.lastIndexOf("/") + 1);
+  return `${path}api/avatar.php?userId=${encodeURIComponent(userId)}`;
+}
+
 export class ApiError extends Error {
   response: { status: number; data: any };
   constructor(status: number, data: any) {
@@ -60,8 +66,10 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/node-templates\/([^/]+)$/, action: "nodeTemplates.delete", extract: (m) => ({ id: m[1] }) },
 
   { pattern: /^\/admin\/users$/, action: "__admin_users_list_or_create__" },
+  { pattern: /^\/admin\/users\/([^/]+)\/delete$/, action: "admin.users.delete", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/admin\/users\/([^/]+)$/, action: "admin.users.update", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/admin\/companies$/, action: "__admin_companies_list_or_create__" },
+  { pattern: /^\/admin\/companies\/([^/]+)\/delete$/, action: "admin.companies.delete", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/admin\/companies\/([^/]+)$/, action: "admin.companies.update", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/admin\/applications$/, action: "admin.applications.list" },
   { pattern: /^\/admin\/permissions$/, action: "__admin_permissions_get_or_set__" },

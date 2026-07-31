@@ -62,6 +62,17 @@ function InlineSteps({ item, onSelect }: { item: any; onSelect: (nodeId: string)
   return <StepDots sequence={sequence} statuses={statuses} badges={badges} onSelect={(node) => onSelect(node.id)} />;
 }
 
+function whoseTurnLabel(item: any, companyUsers: any[]): string {
+  if (!item.currentNodeId) return "—";
+  const nodes = JSON.parse(item.nodesJson);
+  const node = nodes.find((n: any) => n.id === item.currentNodeId);
+  if (!node) return "—";
+  const ids: string[] = node.data?.config?.responsibleUserIds ?? [];
+  if (ids.length === 0) return "Tutti";
+  if (ids.length === 1 && ids[0] === "AI") return "🤖 AI";
+  return ids.map((id) => companyUsers.find((u) => u.id === id)?.fullName ?? id).join(", ");
+}
+
 export function InstanceListPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -86,6 +97,11 @@ export function InstanceListPage() {
   const { data: workflows } = useQuery({
     queryKey: ["workflows"],
     queryFn: async () => (await api.get("/workflows")).data,
+  });
+
+  const { data: companyUsers } = useQuery({
+    queryKey: ["company-users"],
+    queryFn: async () => (await api.get("/companies/users")).data,
   });
 
   const publishedWorkflows = (workflows ?? []).filter((w: any) => w.status === "PUBLISHED");
@@ -197,6 +213,7 @@ export function InstanceListPage() {
               <TableCell>Workflow</TableCell>
               <TableCell>Stato</TableCell>
               <TableCell>Andamento</TableCell>
+              <TableCell>Chi tocca</TableCell>
               <TableCell>Creata</TableCell>
               <TableCell align="right">Timeline</TableCell>
             </TableRow>
@@ -219,6 +236,9 @@ export function InstanceListPage() {
                     }}
                   />
                 </TableCell>
+                <TableCell>
+                  <Typography variant="body2">{whoseTurnLabel(inst, companyUsers ?? [])}</Typography>
+                </TableCell>
                 <TableCell>{dayjs(inst.createdAt).format("DD/MM/YYYY HH:mm")}</TableCell>
                 <TableCell align="right">
                   <IconButton
@@ -236,7 +256,7 @@ export function InstanceListPage() {
             ))}
             {items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={7}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
                     Nessuna istanza trovata con questi filtri.
                   </Typography>

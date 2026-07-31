@@ -20,6 +20,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { api } from "../../api/client";
 
 export function AdminCompaniesPage() {
@@ -27,6 +28,8 @@ export function AdminCompaniesPage() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: companies } = useQuery({
     queryKey: ["admin-companies"],
@@ -49,6 +52,16 @@ export function AdminCompaniesPage() {
   const updateMutation = useMutation({
     mutationFn: async () => api.put(`/admin/companies/${editingId}`, { name }),
     onSuccess: closeDialog,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => api.post(`/admin/companies/${id}/delete`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-companies"] });
+      setDeleteTarget(null);
+      setDeleteError(null);
+    },
+    onError: (err: any) => setDeleteError(err?.response?.data?.error || "Impossibile eliminare l'azienda"),
   });
 
   function openCreate() {
@@ -95,6 +108,9 @@ export function AdminCompaniesPage() {
                   <IconButton size="small" onClick={() => openEdit(c)}>
                     <EditIcon fontSize="small" />
                   </IconButton>
+                  <IconButton size="small" onClick={() => { setDeleteTarget(c); setDeleteError(null); }}>
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
                 </TableCell>
               </TableRow>
             ))}
@@ -115,6 +131,26 @@ export function AdminCompaniesPage() {
             onClick={() => (editingId ? updateMutation.mutate() : createMutation.mutate())}
           >
             {editingId ? "Salva" : "Crea"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Elimina azienda</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Eliminare definitivamente <strong>{deleteTarget?.name}</strong>? L'operazione non e' reversibile.
+          </Typography>
+          {deleteError && (
+            <Typography variant="body2" color="error" sx={{ mt: 1.5 }}>
+              {deleteError}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>Annulla</Button>
+          <Button variant="contained" color="error" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate(deleteTarget.id)}>
+            Elimina
           </Button>
         </DialogActions>
       </Dialog>

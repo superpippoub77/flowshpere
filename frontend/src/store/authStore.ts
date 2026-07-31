@@ -10,7 +10,7 @@ export interface CompanyOption {
 
 interface AuthState {
   token: string | null;
-  user: { id: string; email: string; fullName: string; isSuperAdmin: boolean } | null;
+  user: { id: string; email: string; fullName: string; isSuperAdmin: boolean; hasAvatar?: boolean } | null;
   companies: CompanyOption[];
   currentCompanyId: string | null;
   setSession: (token: string, user: AuthState["user"]) => void;
