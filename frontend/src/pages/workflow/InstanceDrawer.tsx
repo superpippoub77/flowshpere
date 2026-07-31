@@ -172,6 +172,7 @@ export function InstanceDrawer({
   const stepAttachments = dialogNode && instance ? instance.attachments.filter((a: any) => a.nodeId === dialogNode.node.id) : [];
 
   return (
+    <>
     <Drawer anchor="right" open={!!drawerVisible} onClose={onClose} PaperProps={{ sx: { width: 460 } }}>
       {instance && (
         <Box sx={{ p: 3, overflowY: "auto" }}>
@@ -261,6 +262,7 @@ export function InstanceDrawer({
           </Paper>
         </Box>
       )}
+    </Drawer>
 
       {/* Dialog dettaglio/azione step */}
       <Dialog open={!!dialogNode} onClose={() => setDialogNode(null)} fullWidth maxWidth="sm">
@@ -449,6 +451,6 @@ export function InstanceDrawer({
           </>
         )}
       </Dialog>
-    </Drawer>
+    </>
   );
 }
