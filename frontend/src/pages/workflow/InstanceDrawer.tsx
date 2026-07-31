@@ -24,6 +24,8 @@ import dayjs from "dayjs";
 import { api } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { StepDots, computeMainSequence, computeStepStatuses, FlowNode } from "./StepDots";
+import { RichTextEditor } from "./RichTextEditor";
+import { AttachmentDropzone } from "./AttachmentDropzone";
 
 const STATUS_COLOR: Record<string, any> = {
   BOZZA: "default",
@@ -46,6 +48,7 @@ function canActOnNode(node: FlowNode, userId: string, roleKey: string, creatorId
 export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | null; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [comment, setComment] = useState("");
+  const [stepComment, setStepComment] = useState("");
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [decisionComment, setDecisionComment] = useState("");
   const [dialogNode, setDialogNode] = useState<{ node: FlowNode; index: number } | null>(null);
@@ -102,6 +105,20 @@ export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | n
     },
   });
 
+  const stepCommentMutation = useMutation({
+    mutationFn: async (nodeId: string) => api.post(`/instances/${instanceId}/comments`, { body: stepComment, nodeId }),
+    onSuccess: () => {
+      setStepComment("");
+      invalidate();
+    },
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: async ({ nodeId, fileName, mimeType, dataBase64 }: { nodeId: string; fileName: string; mimeType: string; dataBase64: string }) =>
+      api.post(`/instances/${instanceId}/attachments`, { nodeId, fileName, mimeType, dataBase64 }),
+    onSuccess: invalidate,
+  });
+
   const nodes: FlowNode[] = useMemo(() => (instance ? JSON.parse(instance.workflowVersion.nodesJson) : []), [instance]);
   const edges = useMemo(() => (instance ? JSON.parse(instance.workflowVersion.edgesJson) : []), [instance]);
   const sequence = useMemo(() => computeMainSequence(nodes, edges), [nodes, edges]);
@@ -110,9 +127,21 @@ export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | n
     [sequence, instance]
   );
 
+  const badges = useMemo(
+    () =>
+      instance
+        ? sequence.map((n) => ({
+            hasComment: instance.comments.some((c: any) => c.nodeId === n.id),
+            hasAttachment: instance.attachments.some((a: any) => a.nodeId === n.id),
+          }))
+        : [],
+    [sequence, instance]
+  );
+
   function openStep(node: FlowNode, index: number) {
     setFormValues({});
     setDecisionComment("");
+    setStepComment("");
     setDialogNode({ node, index });
   }
 
@@ -123,6 +152,8 @@ export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | n
   const readAllowed = dialogTasks.length === 0 || dialogTasks[0].canRead !== false;
   const cutoff = openTask ? null : dialogTasks[dialogTasks.length - 1]?.resolvedAt;
   const relevantAudit = instance ? instance.auditLogs.filter((l: any) => !cutoff || l.createdAt <= cutoff) : [];
+  const stepComments = dialogNode && instance ? instance.comments.filter((c: any) => c.nodeId === dialogNode.node.id) : [];
+  const stepAttachments = dialogNode && instance ? instance.attachments.filter((a: any) => a.nodeId === dialogNode.node.id) : [];
 
   return (
     <Drawer anchor="right" open={!!instanceId} onClose={onClose} PaperProps={{ sx: { width: 460 } }}>
@@ -147,7 +178,7 @@ export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | n
             <Typography variant="overline" color="text.secondary" sx={{ px: 0.5 }}>
               Andamento del processo
             </Typography>
-            <StepDots sequence={sequence} statuses={statuses} onSelect={openStep} />
+            <StepDots sequence={sequence} statuses={statuses} onSelect={openStep} badges={badges} />
           </Paper>
 
           <Paper sx={{ p: 2, mb: 2 }}>
@@ -266,6 +297,50 @@ export function InstanceDrawer({ instanceId, onClose }: { instanceId: string | n
                       </Typography>
                     ))}
                   </Stack>
+
+                  <Divider sx={{ mb: 2 }} />
+
+                  <Typography variant="overline" color="text.secondary">
+                    Commenti su questo passo
+                  </Typography>
+                  <Stack spacing={1} sx={{ mt: 1, mb: 1.5 }}>
+                    {stepComments.map((c: any) => (
+                      <Box key={c.id} sx={{ borderLeft: "2px solid rgba(127,184,217,0.3)", pl: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {c.author.fullName} · {dayjs(c.createdAt).format("DD/MM HH:mm")}
+                        </Typography>
+                        <Box sx={{ fontSize: 14 }} dangerouslySetInnerHTML={{ __html: c.body }} />
+                      </Box>
+                    ))}
+                    {stepComments.length === 0 && (
+                      <Typography variant="body2" color="text.secondary">
+                        Nessun commento su questo passo.
+                      </Typography>
+                    )}
+                  </Stack>
+                  <RichTextEditor key={`comment-${dialogNode.node.id}`} value={stepComment} onChange={setStepComment} placeholder="Scrivi un commento su questo passo..." />
+                  <Button
+                    size="small"
+                    sx={{ mt: 1 }}
+                    disabled={!stepComment || stepCommentMutation.isPending}
+                    onClick={() => stepCommentMutation.mutate(dialogNode.node.id)}
+                  >
+                    Salva commento
+                  </Button>
+
+                  <Divider sx={{ my: 2 }} />
+
+                  <Typography variant="overline" color="text.secondary">
+                    Allegati di questo passo
+                  </Typography>
+                  <Box sx={{ mt: 1, mb: 2 }}>
+                    <AttachmentDropzone
+                      attachments={stepAttachments}
+                      companyId={currentCompanyId ?? ""}
+                      uploading={uploadMutation.isPending}
+                      onUpload={(file) => uploadMutation.mutate({ nodeId: dialogNode.node.id, ...file })}
+                    />
+                  </Box>
 
                   <Divider sx={{ mb: 2 }} />
 

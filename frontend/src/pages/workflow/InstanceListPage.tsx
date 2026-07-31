@@ -49,7 +49,15 @@ function InlineSteps({ item }: { item: any }) {
     () => computeStepStatuses(sequence, item.tasks, item.currentNodeId, item.status),
     [sequence, item]
   );
-  return <StepDots sequence={sequence} statuses={statuses} compact />;
+  const badges = useMemo(
+    () =>
+      sequence.map((n: any) => {
+        const t = item.tasks.find((t: any) => t.nodeId === n.id);
+        return { hasComment: !!t?.hasComment, hasAttachment: !!t?.hasAttachment };
+      }),
+    [sequence, item]
+  );
+  return <StepDots sequence={sequence} statuses={statuses} compact badges={badges} />;
 }
 
 export function InstanceListPage() {

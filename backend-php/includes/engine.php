@@ -2,6 +2,14 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/audit.php';
 
+// Se il responsabile di uno step e' impostato esattamente su "AI", il passo
+// si risolve da solo (nessun umano deve intervenire).
+function is_ai_responsible(array $node): bool
+{
+    $ids = $node['data']['config']['responsibleUserIds'] ?? [];
+    return count($ids) === 1 && $ids[0] === 'AI';
+}
+
 function find_outgoing(array $edges, string $nodeId, ?string $handle = null): ?array
 {
     if ($handle) {
@@ -12,6 +20,21 @@ function find_outgoing(array $edges, string $nodeId, ?string $handle = null): ?a
     foreach ($edges as $e) {
         if ($e['source'] === $nodeId) return $e;
     }
+    return null;
+}
+
+function find_node_in_instance(string $instanceId, string $nodeId): ?array
+{
+    $stmt = db()->prepare('
+        SELECT wv.nodes_json FROM workflow_instances wi
+        JOIN workflow_versions wv ON wv.id = wi.workflow_version_id
+        WHERE wi.id = ?
+    ');
+    $stmt->execute([$instanceId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return null;
+    $nodes = json_decode($row['nodes_json'], true);
+    foreach ($nodes as $n) if ($n['id'] === $nodeId) return $n;
     return null;
 }
 
@@ -159,12 +182,35 @@ function advance_instance(string $instanceId): void
         }
 
         if ($type === 'upload') {
+            if (is_ai_responsible($node)) {
+                log_audit($companyId, null, $instanceId, 'Allegato simulato automaticamente dall\'AI per "' . ($node['data']['label'] ?? '') . '"');
+                $next = find_outgoing($edges, $node['id']);
+                $currentId = $next['target'] ?? null;
+                continue;
+            }
             ensure_task($instanceId, $node);
             set_current_node($instanceId, $node['id'], 'IN_ATTESA');
             return;
         }
 
         if ($type === 'approval') {
+            if (is_ai_responsible($node)) {
+                $confidence = round((0.7 + (mt_rand() / mt_getrandmax()) * 0.3), 2);
+                $decision = $confidence > 0.5 ? 'approve' : 'reject';
+                db()->prepare('
+                    INSERT INTO ai_decisions (id, instance_id, node_id, suggestion, confidence, auto_applied, reasoning)
+                    VALUES (?, ?, ?, ?, ?, 1, ?)
+                ')->execute([new_id('ai'), $instanceId, $node['id'], $decision === 'approve' ? 'APPROVA' : 'RIFIUTA', $confidence, 'Decisione automatica AI (nodo impostato con responsabile AI).']);
+                log_audit($companyId, null, $instanceId, 'AI decide su "' . ($node['data']['label'] ?? '') . '": ' . ($decision === 'approve' ? 'Approvato' : 'Rifiutato') . ' (confidenza ' . round($confidence * 100) . '%)');
+                if ($decision === 'approve') {
+                    $next = find_outgoing($edges, $node['id'], 'approve');
+                    $currentId = $next['target'] ?? null;
+                    continue;
+                }
+                set_current_node($instanceId, $node['id'], 'IN_ATTESA');
+                send_back($instanceId);
+                return;
+            }
             ensure_task($instanceId, $node);
             set_current_node($instanceId, $node['id'], 'IN_ATTESA');
             return;

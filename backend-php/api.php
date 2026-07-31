@@ -208,6 +208,8 @@ switch ($action) {
 
         $ids = array_map(fn($r) => $r['id'], $rows);
         $tasksByInstance = [];
+        $commentNodesByInstance = [];
+        $attachmentNodesByInstance = [];
         if (!empty($ids)) {
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
             $tStmt = db()->prepare("SELECT * FROM workflow_tasks WHERE instance_id IN ($placeholders) ORDER BY created_at ASC");
@@ -215,18 +217,32 @@ switch ($action) {
             foreach ($tStmt->fetchAll(PDO::FETCH_ASSOC) as $t) {
                 $tasksByInstance[$t['instance_id']][] = $t;
             }
+
+            $cStmt = db()->prepare("SELECT instance_id, node_id FROM workflow_comments WHERE instance_id IN ($placeholders) AND node_id IS NOT NULL");
+            $cStmt->execute($ids);
+            foreach ($cStmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                $commentNodesByInstance[$c['instance_id']][$c['node_id']] = true;
+            }
+
+            $atStmt = db()->prepare("SELECT instance_id, node_id FROM attachments WHERE instance_id IN ($placeholders) AND node_id IS NOT NULL");
+            $atStmt->execute($ids);
+            foreach ($atStmt->fetchAll(PDO::FETCH_ASSOC) as $a) {
+                $attachmentNodesByInstance[$a['instance_id']][$a['node_id']] = true;
+            }
         }
 
         json_response([
-            'items' => array_map(function ($i) use ($tasksByInstance, $user, $ctx) {
+            'items' => array_map(function ($i) use ($tasksByInstance, $commentNodesByInstance, $attachmentNodesByInstance, $user, $ctx) {
                 $nodes = json_decode($i['nodes_json'], true);
                 $nodeById = [];
                 foreach ($nodes as $n) $nodeById[$n['id']] = $n;
-                $tasks = array_map(function ($t) use ($nodeById, $user, $ctx) {
+                $tasks = array_map(function ($t) use ($nodeById, $user, $ctx, $commentNodesByInstance, $attachmentNodesByInstance, $i) {
                     $node = $nodeById[$t['node_id']] ?? null;
                     return [
                         'nodeId' => $t['node_id'], 'nodeType' => $t['node_type'], 'status' => $t['status'],
                         'canRead' => $node ? can_read_node($node, $user['id'], $ctx['roleKey']) : true,
+                        'hasComment' => isset($commentNodesByInstance[$i['id']][$t['node_id']]),
+                        'hasAttachment' => isset($attachmentNodesByInstance[$i['id']][$t['node_id']]),
                     ];
                 }, $tasksByInstance[$i['id']] ?? []);
 
@@ -365,10 +381,66 @@ switch ($action) {
         $ctx = require_company($user, $input['companyId'] ?? null);
         $instance = fetch_instance_row($input['instanceId'], $ctx['companyId']);
 
-        db()->prepare('INSERT INTO workflow_comments (id, instance_id, author_id, body) VALUES (?, ?, ?, ?)')
-            ->execute([new_id('cmt'), $instance['id'], $user['id'], $input['body']]);
-        log_audit($ctx['companyId'], $user['id'], $instance['id'], 'Commento aggiunto');
+        db()->prepare('INSERT INTO workflow_comments (id, instance_id, node_id, author_id, body) VALUES (?, ?, ?, ?, ?)')
+            ->execute([new_id('cmt'), $instance['id'], $input['nodeId'] ?? null, $user['id'], $input['body']]);
+        log_audit($ctx['companyId'], $user['id'], $instance['id'], 'Commento aggiunto' . (!empty($input['nodeId']) ? ' sul passo' : ''));
         json_response(['ok' => true], 201);
+        break;
+
+    case 'instances.attachments.upload':
+        require_fields($input, ['instanceId', 'nodeId', 'fileName', 'mimeType', 'dataBase64']);
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        $instance = fetch_instance_row($input['instanceId'], $ctx['companyId']);
+
+        $node = find_node_in_instance($instance['id'], $input['nodeId']);
+        if ($node && !can_act_on_node($node, $user['id'], $ctx['roleKey'], $instance['created_by_id'])) {
+            error_response('Non sei tra i responsabili di questo passaggio', 403);
+        }
+
+        $binary = base64_decode($input['dataBase64'], true);
+        if ($binary === false) error_response('File non valido', 400);
+        if (strlen($binary) > 8 * 1024 * 1024) error_response('File troppo grande (max 8MB)', 400);
+
+        $attachDir = __DIR__ . '/../data/attachments';
+        if (!is_dir($attachDir)) mkdir($attachDir, 0755, true);
+        $storedName = new_id('file') . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $input['fileName']);
+        file_put_contents($attachDir . '/' . $storedName, $binary);
+
+        $id = new_id('att');
+        db()->prepare('
+            INSERT INTO attachments (id, company_id, instance_id, node_id, uploaded_by_id, file_name, stored_name, mime_type, size)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ')->execute([$id, $ctx['companyId'], $instance['id'], $input['nodeId'], $user['id'], $input['fileName'], $storedName, $input['mimeType'], strlen($binary)]);
+
+        log_audit($ctx['companyId'], $user['id'], $instance['id'], 'Allegato caricato: "' . $input['fileName'] . '"');
+        json_response(['id' => $id], 201);
+        break;
+
+    case 'nodeTemplates.list':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        $stmt = db()->prepare('SELECT * FROM node_templates WHERE company_id = ? ORDER BY created_at DESC');
+        $stmt->execute([$ctx['companyId']]);
+        json_response(array_map(fn($t) => [
+            'id' => $t['id'], 'nodeType' => $t['node_type'], 'label' => $t['label'], 'config' => json_decode($t['config_json'], true),
+        ], $stmt->fetchAll(PDO::FETCH_ASSOC)));
+        break;
+
+    case 'nodeTemplates.create':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        require_role($ctx['roleKey'], ['ADMIN']);
+        require_fields($input, ['nodeType', 'label', 'config']);
+        $id = new_id('tmpl');
+        db()->prepare('INSERT INTO node_templates (id, company_id, node_type, label, config_json, created_by_id) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([$id, $ctx['companyId'], $input['nodeType'], $input['label'], json_encode($input['config']), $user['id']]);
+        json_response(['id' => $id], 201);
+        break;
+
+    case 'nodeTemplates.delete':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        require_role($ctx['roleKey'], ['ADMIN']);
+        require_fields($input, ['id']);
+        db()->prepare('DELETE FROM node_templates WHERE id = ? AND company_id = ?')->execute([$input['id'], $ctx['companyId']]);
+        json_response(['ok' => true]);
         break;
 
     case 'companies.users':
@@ -563,21 +635,6 @@ function fetch_instance_row(string $id, string $companyId): array
     return $row;
 }
 
-function find_node_in_instance(string $instanceId, string $nodeId): ?array
-{
-    $stmt = db()->prepare('
-        SELECT wv.nodes_json FROM workflow_instances wi
-        JOIN workflow_versions wv ON wv.id = wi.workflow_version_id
-        WHERE wi.id = ?
-    ');
-    $stmt->execute([$instanceId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$row) return null;
-    $nodes = json_decode($row['nodes_json'], true);
-    foreach ($nodes as $n) if ($n['id'] === $nodeId) return $n;
-    return null;
-}
-
 // Trova il ruolo standard (ADMIN/SUPERVISOR/OPERATOR) per l'azienda, creandolo
 // al volo se l'azienda non lo avesse ancora (es. azienda aggiunta dopo il seed).
 function ensure_company_role(PDO $pdo, string $companyId, string $roleKey): string
@@ -634,9 +691,20 @@ function fetch_instance_detail(string $id, string $companyId, ?string $requestin
     ');
     $cStmt->execute([$id]);
     $comments = array_map(fn($c) => [
-        'id' => $c['id'], 'body' => $c['body'], 'createdAt' => $c['created_at'],
+        'id' => $c['id'], 'body' => $c['body'], 'createdAt' => $c['created_at'], 'nodeId' => $c['node_id'],
         'author' => ['fullName' => $c['full_name']],
     ], $cStmt->fetchAll(PDO::FETCH_ASSOC));
+
+    $atStmt = db()->prepare('
+        SELECT a.*, u.full_name FROM attachments a
+        JOIN users u ON u.id = a.uploaded_by_id
+        WHERE a.instance_id = ? ORDER BY a.created_at ASC
+    ');
+    $atStmt->execute([$id]);
+    $attachments = array_map(fn($a) => [
+        'id' => $a['id'], 'nodeId' => $a['node_id'], 'fileName' => $a['file_name'], 'mimeType' => $a['mime_type'],
+        'size' => (int) $a['size'], 'createdAt' => $a['created_at'], 'uploadedBy' => ['fullName' => $a['full_name']],
+    ], $atStmt->fetchAll(PDO::FETCH_ASSOC));
 
     $aStmt = db()->prepare('SELECT * FROM ai_decisions WHERE instance_id = ? ORDER BY created_at ASC');
     $aStmt->execute([$id]);
@@ -661,7 +729,7 @@ function fetch_instance_detail(string $id, string $companyId, ?string $requestin
         'currentNodeId' => $instance['current_node_id'], 'createdById' => $instance['created_by_id'],
         'workflow' => ['id' => $workflow['id'], 'name' => $workflow['name']],
         'workflowVersion' => ['nodesJson' => $version['nodes_json'], 'edgesJson' => $version['edges_json']],
-        'tasks' => $tasks, 'comments' => $comments, 'aiDecisions' => $aiDecisions, 'auditLogs' => $auditLogs,
+        'tasks' => $tasks, 'comments' => $comments, 'attachments' => $attachments, 'aiDecisions' => $aiDecisions, 'auditLogs' => $auditLogs,
     ];
 }
 

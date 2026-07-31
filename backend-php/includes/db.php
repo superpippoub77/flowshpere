@@ -65,6 +65,47 @@ function run_migrations(PDO $pdo): void
         // visibilita' effettiva per utente si decide con i permessi, non qui
         $pdo->exec("UPDATE applications SET enabled = 1 WHERE app_key IN ('timesheet', 'ticket', 'crm')");
     }
+
+    if (!$hasColumn('workflow_comments', 'node_id')) {
+        $pdo->exec('ALTER TABLE workflow_comments ADD COLUMN node_id TEXT');
+    }
+
+    $tableExists = function (string $table) use ($pdo): bool {
+        $stmt = $pdo->prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?");
+        $stmt->execute([$table]);
+        return (bool) $stmt->fetch();
+    };
+
+    if (!$tableExists('attachments')) {
+        $pdo->exec("
+            CREATE TABLE attachments (
+                id TEXT PRIMARY KEY,
+                company_id TEXT NOT NULL REFERENCES companies(id),
+                instance_id TEXT NOT NULL REFERENCES workflow_instances(id),
+                node_id TEXT,
+                uploaded_by_id TEXT NOT NULL REFERENCES users(id),
+                file_name TEXT NOT NULL,
+                stored_name TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                size INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ");
+    }
+
+    if (!$tableExists('node_templates')) {
+        $pdo->exec("
+            CREATE TABLE node_templates (
+                id TEXT PRIMARY KEY,
+                company_id TEXT NOT NULL REFERENCES companies(id),
+                node_type TEXT NOT NULL,
+                label TEXT NOT NULL,
+                config_json TEXT NOT NULL DEFAULT '{}',
+                created_by_id TEXT NOT NULL REFERENCES users(id),
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ");
+    }
 }
 
 function new_id(string $prefix = ''): string
@@ -175,8 +216,32 @@ function create_schema(PDO $pdo): void
         CREATE TABLE workflow_comments (
             id TEXT PRIMARY KEY,
             instance_id TEXT NOT NULL REFERENCES workflow_instances(id),
+            node_id TEXT,
             author_id TEXT NOT NULL REFERENCES users(id),
             body TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE attachments (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id),
+            instance_id TEXT NOT NULL REFERENCES workflow_instances(id),
+            node_id TEXT,
+            uploaded_by_id TEXT NOT NULL REFERENCES users(id),
+            file_name TEXT NOT NULL,
+            stored_name TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            size INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE node_templates (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id),
+            node_type TEXT NOT NULL,
+            label TEXT NOT NULL,
+            config_json TEXT NOT NULL DEFAULT '{}',
+            created_by_id TEXT NOT NULL REFERENCES users(id),
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 

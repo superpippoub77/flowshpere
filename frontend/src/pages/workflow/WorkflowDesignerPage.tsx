@@ -24,10 +24,15 @@ import {
   IconButton,
   Divider,
   Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddIcon from "@mui/icons-material/Add";
+import SaveIcon from "@mui/icons-material/SaveOutlined";
 import { api } from "../../api/client";
 import { NODE_PALETTE, nodeTypes } from "./nodeTypes";
 
@@ -43,6 +48,7 @@ function DesignerInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [templateDialog, setTemplateDialog] = useState<{ open: boolean; label: string }>({ open: false, label: "" });
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const nodeCounter = useRef(1);
@@ -56,6 +62,11 @@ function DesignerInner() {
   const { data: companyUsers } = useQuery({
     queryKey: ["company-users"],
     queryFn: async () => (await api.get("/companies/users")).data,
+  });
+
+  const { data: nodeTemplates } = useQuery({
+    queryKey: ["node-templates"],
+    queryFn: async () => (await api.get("/node-templates")).data,
   });
 
   useEffect(() => {
@@ -85,12 +96,22 @@ function DesignerInner() {
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
-      const kind = event.dataTransfer.getData("application/wf-node-kind");
-      if (!kind) return;
       const bounds = wrapperRef.current!.getBoundingClientRect();
       const position = project({ x: event.clientX - bounds.left, y: event.clientY - bounds.top });
-      const meta = NODE_PALETTE.find((m) => m.kind === kind)!;
       const newId = `node_${Date.now()}_${nodeCounter.current++}`;
+
+      const templateId = event.dataTransfer.getData("application/wf-template-id");
+      if (templateId) {
+        const template = (nodeTemplates ?? []).find((t: any) => t.id === templateId);
+        if (!template) return;
+        const newNode: Node = { id: newId, type: template.nodeType, position, data: { label: template.label, config: template.config } };
+        setNodes((nds) => nds.concat(newNode));
+        return;
+      }
+
+      const kind = event.dataTransfer.getData("application/wf-node-kind");
+      if (!kind) return;
+      const meta = NODE_PALETTE.find((m) => m.kind === kind)!;
       const newNode: Node = {
         id: newId,
         type: kind,
@@ -99,7 +120,7 @@ function DesignerInner() {
       };
       setNodes((nds) => nds.concat(newNode));
     },
-    [project, setNodes]
+    [project, setNodes, nodeTemplates]
   );
 
   const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedId), [nodes, selectedId]);
@@ -128,6 +149,14 @@ function DesignerInner() {
   const publishMutation = useMutation({
     mutationFn: async () => api.post(`/workflows/${id}/publish`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workflows"] }),
+  });
+
+  const saveTemplateMutation = useMutation({
+    mutationFn: async (payload: { nodeType: string; label: string; config: any }) => api.post("/node-templates", payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["node-templates"] });
+      setTemplateDialog({ open: false, label: "" });
+    },
   });
 
   return (
@@ -159,6 +188,35 @@ function DesignerInner() {
             </Box>
           ))}
         </Stack>
+
+        {(nodeTemplates ?? []).length > 0 && (
+          <>
+            <Typography variant="overline" color="text.secondary" sx={{ px: 0.5, display: "block", mt: 2.5 }}>
+              Blocchi personalizzati
+            </Typography>
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              {(nodeTemplates ?? []).map((tmpl: any) => (
+                <Box
+                  key={tmpl.id}
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData("application/wf-template-id", tmpl.id)}
+                  sx={{
+                    border: "1px dashed rgba(232,163,61,0.5)",
+                    borderRadius: 1,
+                    px: 1.2,
+                    py: 0.9,
+                    fontSize: 12.5,
+                    cursor: "grab",
+                    userSelect: "none",
+                    "&:hover": { background: "rgba(232,163,61,0.08)" },
+                  }}
+                >
+                  {tmpl.label}
+                </Box>
+              ))}
+            </Stack>
+          </>
+        )}
       </Box>
 
       {/* Canvas */}
@@ -230,6 +288,7 @@ function DesignerInner() {
                   users={companyUsers ?? []}
                   selected={selectedNode.data.config?.responsibleUserIds ?? []}
                   onChange={(ids) => updateSelected((d) => ({ ...d, config: { ...d.config, responsibleUserIds: ids } }))}
+                  allowAI={["approval", "upload"].includes(selectedNode.type ?? "")}
                 />
                 <ReaderUsersEditor
                   users={companyUsers ?? []}
@@ -265,12 +324,46 @@ function DesignerInner() {
             )}
 
             <Divider />
+            {["form", "upload", "approval", "ai"].includes(selectedNode.type ?? "") && (
+              <Button size="small" startIcon={<SaveIcon />} onClick={() => setTemplateDialog({ open: true, label: selectedNode.data.label })}>
+                Salva come blocco personalizzato
+              </Button>
+            )}
             <Button size="small" color="error" startIcon={<DeleteOutlineIcon />} onClick={deleteSelected}>
               Elimina nodo
             </Button>
           </Stack>
         )}
       </Box>
+
+      <Dialog open={templateDialog.open} onClose={() => setTemplateDialog({ open: false, label: "" })} fullWidth maxWidth="xs">
+        <DialogTitle>Salva come blocco personalizzato</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Il blocco sara' disponibile nella palette per tutti quelli che progettano workflow in questa azienda.
+          </Typography>
+          <TextField
+            label="Nome del blocco"
+            fullWidth
+            autoFocus
+            value={templateDialog.label}
+            onChange={(e) => setTemplateDialog((s) => ({ ...s, label: e.target.value }))}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTemplateDialog({ open: false, label: "" })}>Annulla</Button>
+          <Button
+            variant="contained"
+            disabled={!templateDialog.label || saveTemplateMutation.isPending}
+            onClick={() =>
+              selectedNode &&
+              saveTemplateMutation.mutate({ nodeType: selectedNode.type!, label: templateDialog.label, config: selectedNode.data.config ?? {} })
+            }
+          >
+            Salva
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -320,11 +413,22 @@ function ResponsibleUsersEditor({
   users,
   selected,
   onChange,
+  allowAI,
 }: {
   users: { id: string; fullName: string; role: string }[];
   selected: string[];
   onChange: (ids: string[]) => void;
+  allowAI?: boolean;
 }) {
+  function handleChange(value: string[]) {
+    const aiJustPicked = value.includes("AI") && !selected.includes("AI");
+    if (aiJustPicked) {
+      onChange(["AI"]); // l'AI risolve tutto da sola: non ha senso combinarla con altre persone
+      return;
+    }
+    onChange(value.filter((v) => v !== "AI"));
+  }
+
   return (
     <Stack spacing={0.5}>
       <Typography variant="caption" color="text.secondary">
@@ -336,12 +440,17 @@ function ResponsibleUsersEditor({
         SelectProps={{
           multiple: true,
           value: selected,
-          onChange: (e) => onChange(e.target.value as string[]),
+          onChange: (e) => handleChange(e.target.value as string[]),
           renderValue: (value) =>
-            (value as string[]).map((id) => users.find((u) => u.id === id)?.fullName ?? id).join(", "),
+            (value as string[])
+              .map((id) => (id === "AI" ? "🤖 Intelligenza Artificiale" : users.find((u) => u.id === id)?.fullName ?? id))
+              .join(", "),
         }}
         value={selected}
       >
+        {allowAI && (
+          <MenuItem value="AI">🤖 Intelligenza Artificiale (risolve il passo da sola)</MenuItem>
+        )}
         {users.map((u) => (
           <MenuItem key={u.id} value={u.id}>
             {u.fullName} — {u.role}
@@ -349,7 +458,9 @@ function ResponsibleUsersEditor({
         ))}
       </TextField>
       <Typography variant="caption" color="text.secondary">
-        {selected.length === 0
+        {selected.length === 1 && selected[0] === "AI"
+          ? "L'AI decidera' da sola su questo passo, senza intervento umano."
+          : selected.length === 0
           ? "Nessuno assegnato: potranno agire Amministratore/Supervisore (o chi ha creato l'istanza, per i passi di raccolta dati)."
           : `${selected.length} responsabile/i assegnato/i.`}
       </Typography>

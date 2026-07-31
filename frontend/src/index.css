@@ -169,6 +169,32 @@ code,
   min-width: 6px;
 }
 
+.step-badge {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-navy);
+}
+
+.step-badge.comment {
+  top: -3px;
+  right: -3px;
+  background: var(--blueprint-line);
+}
+
+.step-badge.attachment {
+  bottom: -3px;
+  right: -3px;
+  background: var(--signal-amber);
+}
+
+.step-badge.compact {
+  width: 6px;
+  height: 6px;
+  border-width: 1px;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

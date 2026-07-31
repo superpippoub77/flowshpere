@@ -76,11 +76,13 @@ export function StepDots({
   statuses,
   onSelect,
   compact,
+  badges,
 }: {
   sequence: FlowNode[];
   statuses: StepStatus[];
   onSelect?: (node: FlowNode, index: number) => void;
   compact?: boolean;
+  badges?: { hasComment: boolean; hasAttachment: boolean }[];
 }) {
   return (
     <Stack direction="row" alignItems="center" sx={{ overflowX: "auto", py: compact ? 0 : 1 }}>
@@ -90,12 +92,16 @@ export function StepDots({
           sx={{ display: "flex", alignItems: "center", flex: idx < sequence.length - 1 ? 1 : "none", minWidth: compact ? 18 : undefined }}
         >
           <Tooltip title={node.data.label}>
-            <Box
-              className={`step-dot ${statuses[idx]}${compact ? " compact" : ""}`}
-              onClick={onSelect ? () => onSelect(node, idx) : undefined}
-              sx={onSelect ? undefined : { cursor: "default" }}
-            >
-              {compact ? "" : idx + 1}
+            <Box sx={{ position: "relative" }}>
+              <Box
+                className={`step-dot ${statuses[idx]}${compact ? " compact" : ""}`}
+                onClick={onSelect ? () => onSelect(node, idx) : undefined}
+                sx={onSelect ? undefined : { cursor: "default" }}
+              >
+                {compact ? "" : idx + 1}
+              </Box>
+              {badges?.[idx]?.hasComment && <Box className={`step-badge comment${compact ? " compact" : ""}`} />}
+              {badges?.[idx]?.hasAttachment && <Box className={`step-badge attachment${compact ? " compact" : ""}`} />}
             </Box>
           </Tooltip>
           {idx < sequence.length - 1 && <Box className={`step-dot-connector${compact ? " compact" : ""}`} />}

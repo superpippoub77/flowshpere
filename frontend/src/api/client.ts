@@ -19,6 +19,12 @@ function computeApiEndpoint(): string {
 
 const ENDPOINT = computeApiEndpoint();
 
+export function getAttachmentUrl(attachmentId: string, companyId: string): string {
+  let path = window.location.pathname;
+  if (!path.endsWith("/")) path = path.substring(0, path.lastIndexOf("/") + 1);
+  return `${path}api/download.php?id=${encodeURIComponent(attachmentId)}&companyId=${encodeURIComponent(companyId)}`;
+}
+
 export class ApiError extends Error {
   response: { status: number; data: any };
   constructor(status: number, data: any) {
@@ -45,8 +51,11 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/instances\/([^/]+)\/tasks\/([^/]+)\/complete$/, action: "instances.complete", extract: (m) => ({ instanceId: m[1], taskId: m[2] }) },
   { pattern: /^\/instances\/([^/]+)\/comments$/, action: "instances.comment", extract: (m) => ({ instanceId: m[1] }) },
 
+  { pattern: /^\/instances\/([^/]+)\/attachments$/, action: "instances.attachments.upload", extract: (m) => ({ instanceId: m[1] }) },
   { pattern: /^\/dashboard\/kpi$/, action: "dashboard.kpi" },
   { pattern: /^\/companies\/users$/, action: "companies.users" },
+  { pattern: /^\/node-templates$/, action: "__node_templates_list_or_create__" },
+  { pattern: /^\/node-templates\/([^/]+)$/, action: "nodeTemplates.delete", extract: (m) => ({ id: m[1] }) },
 
   { pattern: /^\/admin\/users$/, action: "__admin_users_list_or_create__" },
   { pattern: /^\/admin\/users\/([^/]+)$/, action: "admin.users.update", extract: (m) => ({ id: m[1] }) },
@@ -66,6 +75,7 @@ function resolveAction(method: "get" | "post" | "put", url: string): string {
     if (m.action === "__admin_users_list_or_create__") return method === "get" ? "admin.users.list" : "admin.users.create";
     if (m.action === "__admin_permissions_get_or_set__") return method === "get" ? "admin.permissions.get" : "admin.permissions.set";
     if (m.action === "__admin_companies_list_or_create__") return method === "get" ? "admin.companies.list" : "admin.companies.create";
+    if (m.action === "__node_templates_list_or_create__") return method === "get" ? "nodeTemplates.list" : "nodeTemplates.create";
     return m.action;
   }
   throw new Error(`Nessuna azione API mappata per ${method.toUpperCase()} ${url}`);
