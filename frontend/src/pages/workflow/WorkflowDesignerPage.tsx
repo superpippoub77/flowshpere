@@ -28,11 +28,15 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Menu,
+  ListItemIcon,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddIcon from "@mui/icons-material/Add";
 import SaveIcon from "@mui/icons-material/SaveOutlined";
+import ContentCopyIcon from "@mui/icons-material/ContentCopyOutlined";
+import Magnet from "@mui/icons-material/GridOnOutlined";
 import { api } from "../../api/client";
 import { useStatusStore } from "../../store/statusStore";
 import { NODE_PALETTE, nodeTypes } from "./nodeTypes";
@@ -50,6 +54,37 @@ function DesignerInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [templateDialog, setTemplateDialog] = useState<{ open: boolean; label: string }>({ open: false, label: "" });
+  const [nodeMenu, setNodeMenu] = useState<{ mouseX: number; mouseY: number; nodeId: string } | null>(null);
+  const [paneMenu, setPaneMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
+
+  const GRID_SIZE = 20;
+
+  function duplicateNode(nodeId: string) {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    const newId = `node_${Date.now()}_${nodeCounter.current++}`;
+    setNodes((nds) =>
+      nds.concat({ ...node, id: newId, selected: false, position: { x: node.position.x + 40, y: node.position.y + 40 } })
+    );
+    setNodeMenu(null);
+  }
+
+  function deleteNodeById(nodeId: string) {
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    if (selectedId === nodeId) setSelectedId(null);
+    setNodeMenu(null);
+  }
+
+  function alignAllToGrid() {
+    setNodes((nds) =>
+      nds.map((n) => ({
+        ...n,
+        position: { x: Math.round(n.position.x / GRID_SIZE) * GRID_SIZE, y: Math.round(n.position.y / GRID_SIZE) * GRID_SIZE },
+      }))
+    );
+    setPaneMenu(null);
+  }
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const nodeCounter = useRef(1);
@@ -263,12 +298,57 @@ function DesignerInner() {
             onConnect={onConnect}
             nodeTypes={nodeTypes}
             onNodeClick={(_, n) => setSelectedId(n.id)}
-            onPaneClick={() => setSelectedId(null)}
+            onPaneClick={() => {
+              setSelectedId(null);
+              setNodeMenu(null);
+              setPaneMenu(null);
+            }}
+            onNodeContextMenu={(event, n) => {
+              event.preventDefault();
+              setPaneMenu(null);
+              setSelectedId(n.id);
+              setNodeMenu({ mouseX: event.clientX, mouseY: event.clientY, nodeId: n.id });
+            }}
+            onPaneContextMenu={(event) => {
+              event.preventDefault();
+              setNodeMenu(null);
+              setPaneMenu({ mouseX: (event as React.MouseEvent).clientX, mouseY: (event as React.MouseEvent).clientY });
+            }}
+            snapToGrid
+            snapGrid={[GRID_SIZE, GRID_SIZE]}
             fitView
           >
             <Background gap={22} color="rgba(127,184,217,0.16)" />
             <Controls />
           </ReactFlow>
+
+          <Menu
+            open={!!nodeMenu}
+            onClose={() => setNodeMenu(null)}
+            anchorReference="anchorPosition"
+            anchorPosition={nodeMenu ? { top: nodeMenu.mouseY, left: nodeMenu.mouseX } : undefined}
+          >
+            <MenuItem onClick={() => nodeMenu && duplicateNode(nodeMenu.nodeId)}>
+              <ListItemIcon><ContentCopyIcon fontSize="small" /></ListItemIcon>
+              Duplica blocco
+            </MenuItem>
+            <MenuItem onClick={() => nodeMenu && deleteNodeById(nodeMenu.nodeId)}>
+              <ListItemIcon><DeleteOutlineIcon fontSize="small" /></ListItemIcon>
+              Elimina blocco
+            </MenuItem>
+          </Menu>
+
+          <Menu
+            open={!!paneMenu}
+            onClose={() => setPaneMenu(null)}
+            anchorReference="anchorPosition"
+            anchorPosition={paneMenu ? { top: paneMenu.mouseY, left: paneMenu.mouseX } : undefined}
+          >
+            <MenuItem onClick={alignAllToGrid}>
+              <ListItemIcon><Magnet fontSize="small" /></ListItemIcon>
+              Allinea tutti i blocchi alla griglia
+            </MenuItem>
+          </Menu>
         </Box>
       </Box>
 
