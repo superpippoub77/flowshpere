@@ -64,9 +64,15 @@ function DesignerInner() {
     setDescription(workflow.description ?? "");
     const latest = workflow.versions[0];
     if (latest) {
-      setNodes(JSON.parse(latest.nodesJson));
+      const rawNodes = JSON.parse(latest.nodesJson);
+      // Ripara eventuali nodi salvati senza "position" (bug di una versione precedente)
+      const fixedNodes = rawNodes.map((n: any, i: number) => ({
+        ...n,
+        position: n.position && typeof n.position.x === "number" ? n.position : { x: 250, y: 60 + i * 120 },
+      }));
+      setNodes(fixedNodes);
       setEdges(JSON.parse(latest.edgesJson));
-      nodeCounter.current = JSON.parse(latest.nodesJson).length + 1;
+      nodeCounter.current = rawNodes.length + 1;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflow]);
@@ -219,11 +225,18 @@ function DesignerInner() {
             />
 
             {["form", "upload", "approval", "ai"].includes(selectedNode.type ?? "") && (
-              <ResponsibleUsersEditor
-                users={companyUsers ?? []}
-                selected={selectedNode.data.config?.responsibleUserIds ?? []}
-                onChange={(ids) => updateSelected((d) => ({ ...d, config: { ...d.config, responsibleUserIds: ids } }))}
-              />
+              <>
+                <ResponsibleUsersEditor
+                  users={companyUsers ?? []}
+                  selected={selectedNode.data.config?.responsibleUserIds ?? []}
+                  onChange={(ids) => updateSelected((d) => ({ ...d, config: { ...d.config, responsibleUserIds: ids } }))}
+                />
+                <ReaderUsersEditor
+                  users={companyUsers ?? []}
+                  selected={selectedNode.data.config?.readerUserIds ?? []}
+                  onChange={(ids) => updateSelected((d) => ({ ...d, config: { ...d.config, readerUserIds: ids } }))}
+                />
+              </>
             )}
 
             {selectedNode.type === "form" && (
@@ -259,6 +272,47 @@ function DesignerInner() {
         )}
       </Box>
     </Box>
+  );
+}
+
+function ReaderUsersEditor({
+  users,
+  selected,
+  onChange,
+}: {
+  users: { id: string; fullName: string; role: string }[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  return (
+    <Stack spacing={0.5}>
+      <Typography variant="caption" color="text.secondary">
+        Lettori (chi puo' vedere questo step)
+      </Typography>
+      <TextField
+        select
+        size="small"
+        SelectProps={{
+          multiple: true,
+          value: selected,
+          onChange: (e) => onChange(e.target.value as string[]),
+          renderValue: (value) =>
+            (value as string[]).map((id) => users.find((u) => u.id === id)?.fullName ?? id).join(", "),
+        }}
+        value={selected}
+      >
+        {users.map((u) => (
+          <MenuItem key={u.id} value={u.id}>
+            {u.fullName} — {u.role}
+          </MenuItem>
+        ))}
+      </TextField>
+      <Typography variant="caption" color="text.secondary">
+        {selected.length === 0
+          ? "Nessuna restrizione: lo storico di questo step e' visibile a tutti quelli con accesso all'azienda."
+          : `Solo ${selected.length} persona/e (piu' i responsabili) potranno vederne lo storico.`}
+      </Typography>
+    </Stack>
   );
 }
 

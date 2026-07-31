@@ -18,9 +18,11 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  MenuItem,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import { api } from "../../api/client";
+import { useAuthStore } from "../../store/authStore";
 
 const STATUS_LABEL: Record<string, { label: string; color: any }> = {
   DRAFT: { label: "Bozza", color: "default" },
@@ -34,6 +36,10 @@ export function WorkflowListPage() {
   const [openCreate, setOpenCreate] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const companies = useAuthStore((s) => s.companies);
+  const currentCompanyId = useAuthStore((s) => s.currentCompanyId);
+  const setCurrentCompany = useAuthStore((s) => s.setCurrentCompany);
+  const [targetCompanyId, setTargetCompanyId] = useState(currentCompanyId ?? "");
 
   const { data: workflows } = useQuery({
     queryKey: ["workflows"],
@@ -43,10 +49,11 @@ export function WorkflowListPage() {
   const createMutation = useMutation({
     mutationFn: async () => {
       const startNode = { id: "n1", type: "start", position: { x: 250, y: 60 }, data: { label: "Inizio Processo" } };
-      const res = await api.post("/workflows", { name, description, nodes: [startNode], edges: [] });
+      const res = await api.post("/workflows", { name, description, nodes: [startNode], edges: [], companyId: targetCompanyId });
       return res.data;
     },
     onSuccess: (workflow) => {
+      if (targetCompanyId && targetCompanyId !== currentCompanyId) setCurrentCompany(targetCompanyId);
       queryClient.invalidateQueries({ queryKey: ["workflows"] });
       setOpenCreate(false);
       setName("");
@@ -130,6 +137,15 @@ export function WorkflowListPage() {
         <DialogTitle>Nuovo workflow</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+            {companies.length > 1 && (
+              <TextField select label="Azienda" value={targetCompanyId} onChange={(e) => setTargetCompanyId(e.target.value)} fullWidth>
+                {companies.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             <TextField label="Nome" value={name} onChange={(e) => setName(e.target.value)} fullWidth autoFocus />
             <TextField
               label="Descrizione"

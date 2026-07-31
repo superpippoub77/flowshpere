@@ -33,6 +33,20 @@ function require_super_admin(array $user): void
     if (!$user['is_super_admin']) error_response('Riservato al Super Amministratore', 403);
 }
 
+// Verifica se l'utente puo' LEGGERE i dettagli di un determinato step
+// (storico, commenti associati). Se non ci sono lettori specifici assegnati,
+// chiunque abbia accesso all'azienda puo' leggere (comportamento di base).
+function can_read_node(array $node, string $userId, string $roleKey): bool
+{
+    if ($roleKey === 'SUPERVISOR' || $roleKey === 'SUPER_ADMIN' || $roleKey === 'ADMIN') return true;
+
+    $readerIds = $node['data']['config']['readerUserIds'] ?? [];
+    if (empty($readerIds)) return true;
+
+    $responsibleIds = $node['data']['config']['responsibleUserIds'] ?? [];
+    return in_array($userId, $readerIds, true) || in_array($userId, $responsibleIds, true);
+}
+
 function require_role(string $roleKey, array $allowed): void
 {
     if ($roleKey === 'SUPER_ADMIN' || in_array($roleKey, $allowed, true)) return;

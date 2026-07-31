@@ -11,6 +11,7 @@ import { InstanceDetailPage } from "./pages/workflow/InstanceDetailPage";
 import { AdminShell } from "./pages/admin/AdminShell";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminPermissionsPage } from "./pages/admin/AdminPermissionsPage";
+import { AdminCompaniesPage } from "./pages/admin/AdminCompaniesPage";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
@@ -69,7 +70,8 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<Navigate to="users" replace />} />
+        <Route index element={<Navigate to="companies" replace />} />
+        <Route path="companies" element={<AdminCompaniesPage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="permissions" element={<AdminPermissionsPage />} />
       </Route>

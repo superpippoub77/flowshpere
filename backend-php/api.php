@@ -248,7 +248,7 @@ switch ($action) {
     case 'instances.get':
         require_fields($input, ['id']);
         $ctx = require_company($user, $input['companyId'] ?? null);
-        json_response(fetch_instance_detail($input['id'], $ctx['companyId']));
+        json_response(fetch_instance_detail($input['id'], $ctx['companyId'], $user['id'], $ctx['roleKey']));
         break;
 
     case 'instances.formSubmit':
@@ -385,8 +385,25 @@ switch ($action) {
 
     case 'admin.companies.list':
         require_super_admin($user);
-        $rows = db()->query('SELECT id, name FROM companies ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
+        $rows = db()->query('SELECT id, name, slug FROM companies ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
         json_response($rows);
+        break;
+
+    case 'admin.companies.create':
+        require_super_admin($user);
+        require_fields($input, ['name']);
+        $slug = strtolower(trim(preg_replace('/[^a-zA-Z0-9]+/', '-', $input['name']), '-'));
+        $stmt = db()->prepare('SELECT id FROM companies WHERE slug = ?');
+        $stmt->execute([$slug]);
+        if ($stmt->fetch()) $slug .= '-' . substr(new_id(), -6);
+
+        $id = new_id('co');
+        db()->prepare('INSERT INTO companies (id, name, slug) VALUES (?, ?, ?)')->execute([$id, $input['name'], $slug]);
+        // predispone subito i ruoli standard, cosi' l'azienda e' pronta per assegnare permessi
+        ensure_company_role(db(), $id, 'ADMIN');
+        ensure_company_role(db(), $id, 'SUPERVISOR');
+        ensure_company_role(db(), $id, 'OPERATOR');
+        json_response(['id' => $id], 201);
         break;
 
     case 'admin.permissions.get':
@@ -510,7 +527,7 @@ function ensure_company_role(PDO $pdo, string $companyId, string $roleKey): stri
     return $id;
 }
 
-function fetch_instance_detail(string $id, string $companyId): array
+function fetch_instance_detail(string $id, string $companyId, ?string $requestingUserId = null, ?string $requestingRoleKey = null): array
 {
     $instance = fetch_instance_row($id, $companyId);
 
@@ -521,6 +538,9 @@ function fetch_instance_detail(string $id, string $companyId): array
     $vStmt = db()->prepare('SELECT * FROM workflow_versions WHERE id = ?');
     $vStmt->execute([$instance['workflow_version_id']]);
     $version = $vStmt->fetch(PDO::FETCH_ASSOC);
+    $nodes = json_decode($version['nodes_json'], true);
+    $nodeById = [];
+    foreach ($nodes as $n) $nodeById[$n['id']] = $n;
 
     $tStmt = db()->prepare('
         SELECT t.*, u.full_name as assigned_name FROM workflow_tasks t
@@ -528,11 +548,17 @@ function fetch_instance_detail(string $id, string $companyId): array
         WHERE t.instance_id = ? ORDER BY t.created_at ASC
     ');
     $tStmt->execute([$id]);
-    $tasks = array_map(fn($t) => [
-        'id' => $t['id'], 'nodeId' => $t['node_id'], 'nodeType' => $t['node_type'], 'nodeLabel' => $t['node_label'],
-        'status' => $t['status'], 'assignedTo' => $t['assigned_name'] ? ['fullName' => $t['assigned_name']] : null,
-        'createdAt' => $t['created_at'], 'resolvedAt' => $t['resolved_at'],
-    ], $tStmt->fetchAll(PDO::FETCH_ASSOC));
+    $tasks = array_map(function ($t) use ($nodeById, $requestingUserId, $requestingRoleKey) {
+        $node = $nodeById[$t['node_id']] ?? null;
+        $canRead = ($node && $requestingRoleKey !== null)
+            ? can_read_node($node, $requestingUserId ?? '', $requestingRoleKey)
+            : true;
+        return [
+            'id' => $t['id'], 'nodeId' => $t['node_id'], 'nodeType' => $t['node_type'], 'nodeLabel' => $t['node_label'],
+            'status' => $t['status'], 'assignedTo' => $t['assigned_name'] ? ['fullName' => $t['assigned_name']] : null,
+            'createdAt' => $t['created_at'], 'resolvedAt' => $t['resolved_at'], 'canRead' => $canRead,
+        ];
+    }, $tStmt->fetchAll(PDO::FETCH_ASSOC));
 
     $cStmt = db()->prepare('
         SELECT c.*, u.full_name FROM workflow_comments c

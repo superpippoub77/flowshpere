@@ -127,6 +127,7 @@ export function InstanceDetailPage() {
   const dialogTasks = dialogNode ? instance.tasks.filter((t: any) => t.nodeId === dialogNode.node.id) : [];
   const openTask = dialogTasks.find((t: any) => t.status === "APERTO");
   const authorized = dialogNode && user ? canActOnNode(dialogNode.node, user.id, roleKey, instance.createdById) : false;
+  const readAllowed = dialogTasks.length === 0 || dialogTasks[0].canRead !== false;
 
   // audit log fino a questo step (in base all'ultimo aggiornamento del task, o ad ora se e' quello attivo)
   const cutoff = openTask ? null : dialogTasks[dialogTasks.length - 1]?.resolvedAt;
@@ -241,52 +242,58 @@ export function InstanceDetailPage() {
               Passo {dialogNode.index + 1}: {dialogNode.node.data.label}
             </DialogTitle>
             <DialogContent>
-              <Typography variant="overline" color="text.secondary">
-                Storico dei tentativi
-              </Typography>
-              <Stack spacing={1} sx={{ mb: 2, mt: 1 }}>
-                {dialogTasks.length === 0 && (
-                  <Typography variant="body2" color="text.secondary">
-                    Passo non ancora raggiunto.
-                  </Typography>
-                )}
-                {dialogTasks.map((t: any) => (
-                  <Box key={t.id} sx={{ borderLeft: "2px solid rgba(127,184,217,0.3)", pl: 1.5 }}>
-                    <Typography variant="body2">
-                      {t.status} {t.assignedTo ? `— ${t.assignedTo.fullName}` : ""}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" className="mono">
-                      {dayjs(t.createdAt).format("DD/MM HH:mm")}
-                      {t.resolvedAt ? ` → ${dayjs(t.resolvedAt).format("DD/MM HH:mm")}` : ""}
-                    </Typography>
-                  </Box>
-                ))}
-              </Stack>
-
-              <Typography variant="overline" color="text.secondary">
-                Andamento fino a qui
-              </Typography>
-              <Stack spacing={1} sx={{ mt: 1, mb: 2 }}>
-                {relevantAudit.map((l: any) => (
-                  <Typography key={l.id} variant="body2" color="text.secondary">
-                    <span className="mono">{dayjs(l.createdAt).format("HH:mm:ss")}</span> — {l.action}
-                  </Typography>
-                ))}
-              </Stack>
-
-              <Divider sx={{ mb: 2 }} />
-
-              {!dialogIsActive && (
-                <Alert severity="info">Questo passo non e' quello attivo: solo consultabile.</Alert>
+              {!readAllowed && (
+                <Alert severity="warning">Non hai i permessi di lettura per questo passaggio.</Alert>
               )}
 
-              {dialogIsActive && !authorized && (
-                <Alert severity="warning">Non accessibile: non sei tra i responsabili di questo passaggio.</Alert>
-              )}
+              {readAllowed && (
+                <>
+                  <Typography variant="overline" color="text.secondary">
+                    Storico dei tentativi
+                  </Typography>
+                  <Stack spacing={1} sx={{ mb: 2, mt: 1 }}>
+                    {dialogTasks.length === 0 && (
+                      <Typography variant="body2" color="text.secondary">
+                        Passo non ancora raggiunto.
+                      </Typography>
+                    )}
+                    {dialogTasks.map((t: any) => (
+                      <Box key={t.id} sx={{ borderLeft: "2px solid rgba(127,184,217,0.3)", pl: 1.5 }}>
+                        <Typography variant="body2">
+                          {t.status} {t.assignedTo ? `— ${t.assignedTo.fullName}` : ""}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" className="mono">
+                          {dayjs(t.createdAt).format("DD/MM HH:mm")}
+                          {t.resolvedAt ? ` → ${dayjs(t.resolvedAt).format("DD/MM HH:mm")}` : ""}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
 
-              {dialogIsActive && authorized && openTask?.nodeType === "form" && (
-                <Stack spacing={2}>
-                  {(dialogNode.node.data.config?.fields ?? []).map((f: any) => (
+                  <Typography variant="overline" color="text.secondary">
+                    Andamento fino a qui
+                  </Typography>
+                  <Stack spacing={1} sx={{ mt: 1, mb: 2 }}>
+                    {relevantAudit.map((l: any) => (
+                      <Typography key={l.id} variant="body2" color="text.secondary">
+                        <span className="mono">{dayjs(l.createdAt).format("HH:mm:ss")}</span> — {l.action}
+                      </Typography>
+                    ))}
+                  </Stack>
+
+                  <Divider sx={{ mb: 2 }} />
+
+                  {!dialogIsActive && (
+                    <Alert severity="info">Questo passo non e' quello attivo: solo consultabile.</Alert>
+                  )}
+
+                  {dialogIsActive && !authorized && (
+                    <Alert severity="warning">Non accessibile: non sei tra i responsabili di questo passaggio.</Alert>
+                  )}
+
+                  {dialogIsActive && authorized && openTask?.nodeType === "form" && (
+                    <Stack spacing={2}>
+                      {(dialogNode.node.data.config?.fields ?? []).map((f: any) => (
                     <TextField
                       key={f.id}
                       label={f.label}
@@ -316,23 +323,25 @@ export function InstanceDetailPage() {
                   minRows={2}
                 />
               )}
+                </>
+              )}
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setDialogNode(null)}>Chiudi</Button>
 
-              {dialogIsActive && authorized && openTask?.nodeType === "form" && (
+              {readAllowed && dialogIsActive && authorized && openTask?.nodeType === "form" && (
                 <Button variant="contained" onClick={() => formMutation.mutate(openTask.id)} disabled={formMutation.isPending}>
                   Invia form
                 </Button>
               )}
 
-              {dialogIsActive && authorized && openTask?.nodeType === "upload" && (
+              {readAllowed && dialogIsActive && authorized && openTask?.nodeType === "upload" && (
                 <Button variant="contained" onClick={() => completeMutation.mutate(openTask.id)} disabled={completeMutation.isPending}>
                   Simula caricamento
                 </Button>
               )}
 
-              {dialogIsActive && authorized && (openTask?.nodeType === "approval" || openTask?.nodeType === "ai") && (
+              {readAllowed && dialogIsActive && authorized && (openTask?.nodeType === "approval" || openTask?.nodeType === "ai") && (
                 <>
                   <Button
                     variant="outlined"

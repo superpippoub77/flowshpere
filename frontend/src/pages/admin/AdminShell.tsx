@@ -2,11 +2,13 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Box, Stack, Typography, IconButton, Tooltip } from "@mui/material";
 import PeopleIcon from "@mui/icons-material/PeopleOutlined";
 import LockPersonIcon from "@mui/icons-material/LockPersonOutlined";
+import BusinessIcon from "@mui/icons-material/BusinessOutlined";
 import AppsIcon from "@mui/icons-material/AppsOutlined";
 import LogoutIcon from "@mui/icons-material/LogoutOutlined";
 import { useAuthStore } from "../../store/authStore";
 
 const navItems = [
+  { to: "/admin/companies", label: "Aziende", icon: <BusinessIcon /> },
   { to: "/admin/users", label: "Utenti", icon: <PeopleIcon /> },
   { to: "/admin/permissions", label: "Permessi", icon: <LockPersonIcon /> },
 ];

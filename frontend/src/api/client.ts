@@ -49,7 +49,7 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/companies\/users$/, action: "companies.users" },
 
   { pattern: /^\/admin\/users$/, action: "__admin_users_list_or_create__" },
-  { pattern: /^\/admin\/companies$/, action: "admin.companies.list" },
+  { pattern: /^\/admin\/companies$/, action: "__admin_companies_list_or_create__" },
   { pattern: /^\/admin\/permissions$/, action: "__admin_permissions_get_or_set__" },
   { pattern: /^\/admin\/permissions\/revoke$/, action: "admin.permissions.revoke" },
 ];
@@ -62,6 +62,7 @@ function resolveAction(method: "get" | "post" | "put", url: string): string {
     if (m.action === "__instances_list_or_create__") return method === "get" ? "instances.list" : "instances.create";
     if (m.action === "__admin_users_list_or_create__") return method === "get" ? "admin.users.list" : "admin.users.create";
     if (m.action === "__admin_permissions_get_or_set__") return method === "get" ? "admin.permissions.get" : "admin.permissions.set";
+    if (m.action === "__admin_companies_list_or_create__") return method === "get" ? "admin.companies.list" : "admin.companies.create";
     return m.action;
   }
   throw new Error(`Nessuna azione API mappata per ${method.toUpperCase()} ${url}`);
