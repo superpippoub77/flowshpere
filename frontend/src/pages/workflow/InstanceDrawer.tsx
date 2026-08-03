@@ -278,6 +278,12 @@ export function InstanceDrawer({
 
               {readAllowed && (
                 <>
+                  {dialogNode.node.data.config?.description && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      {dialogNode.node.data.config.description}
+                    </Alert>
+                  )}
+
                   <Typography variant="overline" color="text.secondary">
                     Storico dei tentativi
                   </Typography>

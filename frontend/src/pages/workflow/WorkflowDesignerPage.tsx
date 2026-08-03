@@ -377,6 +377,15 @@ function DesignerInner() {
               onChange={(e) => updateSelected((d) => ({ ...d, label: e.target.value }))}
             />
 
+            <ClearableTextField
+              label="Descrizione del passo (mostrata a chi deve eseguirlo)"
+              size="small"
+              multiline
+              minRows={2}
+              value={selectedNode.data.config?.description ?? ""}
+              onChange={(e) => updateSelected((d) => ({ ...d, config: { ...d.config, description: e.target.value } }))}
+            />
+
             {["form", "upload", "approval", "ai"].includes(selectedNode.type ?? "") && (
               <>
                 <ResponsibleUsersEditor
