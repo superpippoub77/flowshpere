@@ -73,10 +73,31 @@ diretto al database SQLite da browser (senza sarebbe scaricabile da chiunque con
   assegna a un responsabile
 - Dashboard con i KPI richiesti (attivi, conclusi, tempo medio, % approvazioni, decisioni AI)
 
+## Sicurezza e integrazioni esterne
+
+- **Cifratura a riposo (AES-256-GCM)**: i dati dell'ordine (`data_json` delle istanze) e il contenuto
+  degli allegati sono cifrati sul disco/database; le chiavi si generano da sole al primo avvio e si
+  salvano in `backend-php/data/` (cartella gia' protetta da `.htaccess`, mai accessibile via browser).
+- **Token API (JWT)**: da Workflow → "Token API" un Amministratore puo' generare un token JWT
+  (facoltativamente vincolato a un workflow specifico) da consegnare a un sistema esterno.
+- **Endpoint ordini esterni** (`backend-php/orders.php`): un sistema esterno puo' inviare un ordine
+  senza login, con:
+  ```
+  POST /api/orders.php
+  Authorization: Bearer <token>
+  Content-Type: application/json
+
+  { "workflowId": "wf_...", "data": { "cliente": "ACME", "importo": 500 } }
+  ```
+  Se i dati inviati coprono gia' tutti i campi del primo form, l'istanza salta quel passo e
+  prosegue da sola. Il token e' revocabile in qualsiasi momento dalla stessa pagina.
+- **Concatenamento tra workflow**: sul nodo "Fine Processo" si puo' scegliere un "workflow
+  successivo" — quando un'istanza si completa, ne parte automaticamente una nuova su quel workflow,
+  con gli stessi dati, tracciata come collegata all'istanza di origine.
+
 ## Cosa manca ancora (prossimi passi naturali)
 
 - Gestione utenti/ruoli/aziende da interfaccia (oggi solo da seed/DB)
-- Upload reale degli allegati (oggi simulato) e versionamento file
 - Notifiche email reali (oggi solo salvate a DB) e canali futuri (WhatsApp/Teams/Slack)
 - MFA e OAuth sul login
 - Applicazioni successive del hub (Timesheet, CRM, Ticket, ...) — il modello dati e

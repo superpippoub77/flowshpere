@@ -65,6 +65,8 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/companies\/users$/, action: "companies.users" },
   { pattern: /^\/node-templates$/, action: "__node_templates_list_or_create__" },
   { pattern: /^\/node-templates\/([^/]+)$/, action: "nodeTemplates.delete", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/api-tokens$/, action: "__api_tokens_list_or_create__" },
+  { pattern: /^\/api-tokens\/([^/]+)\/revoke$/, action: "apiTokens.revoke", extract: (m) => ({ id: m[1] }) },
 
   { pattern: /^\/admin\/users$/, action: "__admin_users_list_or_create__" },
   { pattern: /^\/admin\/users\/([^/]+)\/delete$/, action: "admin.users.delete", extract: (m) => ({ id: m[1] }) },
@@ -87,6 +89,7 @@ function resolveAction(method: "get" | "post" | "put", url: string): string {
     if (m.action === "__admin_permissions_get_or_set__") return method === "get" ? "admin.permissions.get" : "admin.permissions.set";
     if (m.action === "__admin_companies_list_or_create__") return method === "get" ? "admin.companies.list" : "admin.companies.create";
     if (m.action === "__node_templates_list_or_create__") return method === "get" ? "nodeTemplates.list" : "nodeTemplates.create";
+    if (m.action === "__api_tokens_list_or_create__") return method === "get" ? "apiTokens.list" : "apiTokens.create";
     return m.action;
   }
   throw new Error(`Nessuna azione API mappata per ${method.toUpperCase()} ${url}`);

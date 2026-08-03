@@ -105,6 +105,11 @@ function DesignerInner() {
     queryFn: async () => (await api.get("/node-templates")).data,
   });
 
+  const { data: allWorkflows } = useQuery({
+    queryKey: ["workflows"],
+    queryFn: async () => (await api.get("/workflows")).data,
+  });
+
   useEffect(() => {
     if (!workflow) return;
     setName(workflow.name);
@@ -410,6 +415,30 @@ function DesignerInner() {
                 value={selectedNode.data.config?.template ?? ""}
                 onChange={(e) => updateSelected((d) => ({ ...d, config: { ...d.config, template: e.target.value } }))}
               />
+            )}
+
+            {selectedNode.type === "end" && (
+              <Stack spacing={0.5}>
+                <TextField
+                  select
+                  label="Workflow successivo (opzionale)"
+                  size="small"
+                  value={selectedNode.data.config?.nextWorkflowId ?? ""}
+                  onChange={(e) => updateSelected((d) => ({ ...d, config: { ...d.config, nextWorkflowId: e.target.value || undefined } }))}
+                >
+                  <MenuItem value="">Nessuno: il processo termina qui</MenuItem>
+                  {(allWorkflows ?? [])
+                    .filter((w: any) => w.id !== id && w.status === "PUBLISHED")
+                    .map((w: any) => (
+                      <MenuItem key={w.id} value={w.id}>
+                        {w.name}
+                      </MenuItem>
+                    ))}
+                </TextField>
+                <Typography variant="caption" color="text.secondary">
+                  Quando questo processo si conclude, ne viene avviato automaticamente uno nuovo su quel workflow.
+                </Typography>
+              </Stack>
             )}
 
             <Divider />

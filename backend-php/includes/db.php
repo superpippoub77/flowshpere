@@ -112,6 +112,25 @@ function run_migrations(PDO $pdo): void
             )
         ");
     }
+
+    if (!$hasColumn('workflow_instances', 'origin_instance_id')) {
+        $pdo->exec('ALTER TABLE workflow_instances ADD COLUMN origin_instance_id TEXT');
+    }
+
+    if (!$tableExists('api_tokens')) {
+        $pdo->exec("
+            CREATE TABLE api_tokens (
+                id TEXT PRIMARY KEY,
+                company_id TEXT NOT NULL REFERENCES companies(id),
+                workflow_id TEXT REFERENCES workflows(id),
+                label TEXT NOT NULL,
+                jti TEXT UNIQUE NOT NULL,
+                created_by_id TEXT NOT NULL REFERENCES users(id),
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                revoked INTEGER NOT NULL DEFAULT 0
+            )
+        ");
+    }
 }
 
 function new_id(string $prefix = ''): string
@@ -206,6 +225,7 @@ function create_schema(PDO $pdo): void
             status TEXT NOT NULL DEFAULT 'BOZZA',
             current_node_id TEXT,
             data_json TEXT NOT NULL DEFAULT '{}',
+            origin_instance_id TEXT,
             created_by_id TEXT NOT NULL REFERENCES users(id),
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -253,6 +273,17 @@ function create_schema(PDO $pdo): void
             config_json TEXT NOT NULL DEFAULT '{}',
             created_by_id TEXT NOT NULL REFERENCES users(id),
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE api_tokens (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id),
+            workflow_id TEXT REFERENCES workflows(id),
+            label TEXT NOT NULL,
+            jti TEXT UNIQUE NOT NULL,
+            created_by_id TEXT NOT NULL REFERENCES users(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            revoked INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE ai_decisions (

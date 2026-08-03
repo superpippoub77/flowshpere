@@ -6,6 +6,7 @@ import { DashboardPage } from "./pages/workflow/DashboardPage";
 import { WorkflowListPage } from "./pages/workflow/WorkflowListPage";
 import { WorkflowDesignerPage } from "./pages/workflow/WorkflowDesignerPage";
 import { InstanceListPage } from "./pages/workflow/InstanceListPage";
+import { ApiTokensPage } from "./pages/workflow/ApiTokensPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminPermissionsPage } from "./pages/admin/AdminPermissionsPage";
 import { AdminCompaniesPage } from "./pages/admin/AdminCompaniesPage";
@@ -41,6 +42,7 @@ export function App() {
         <Route path="workflow/designer" element={<WorkflowListPage />} />
         <Route path="workflow/designer/:id" element={<WorkflowDesignerPage />} />
         <Route path="workflow/instances" element={<InstanceListPage />} />
+        <Route path="workflow/api-tokens" element={<ApiTokensPage />} />
 
         <Route
           path="admin/companies"

@@ -1,8 +1,10 @@
 <?php
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/includes/crypto.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/tenant.php';
+require_once __DIR__ . '/includes/engine.php';
 
 start_session();
 $user = current_user();
@@ -34,8 +36,10 @@ if ($attachment['node_id']) {
 $path = __DIR__ . '/data/attachments/' . $attachment['stored_name'];
 if (!file_exists($path)) error_response('File non trovato sul server', 404);
 
+$plain = decrypt_bytes(file_get_contents($path));
+
 header('Content-Type: ' . $attachment['mime_type']);
-header('Content-Length: ' . $attachment['size']);
+header('Content-Length: ' . strlen($plain));
 header('Content-Disposition: inline; filename="' . basename($attachment['file_name']) . '"');
-readfile($path);
+echo $plain;
 exit;

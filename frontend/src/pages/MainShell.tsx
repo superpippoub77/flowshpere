@@ -25,6 +25,7 @@ import MenuIcon from "@mui/icons-material/Menu";
 import DashboardIcon from "@mui/icons-material/SpaceDashboardOutlined";
 import AccountTreeIcon from "@mui/icons-material/AccountTreeOutlined";
 import ListAltIcon from "@mui/icons-material/ListAltOutlined";
+import VpnKeyIcon from "@mui/icons-material/VpnKeyOutlined";
 import ScheduleIcon from "@mui/icons-material/ScheduleOutlined";
 import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumberOutlined";
 import GroupsIcon from "@mui/icons-material/GroupsOutlined";
@@ -50,6 +51,7 @@ const APP_OPERATIONS: Record<string, { label: string; to: string; icon: JSX.Elem
     { label: "Dashboard", to: "/workflow/dashboard", icon: <DashboardIcon fontSize="small" /> },
     { label: "Designer workflow", to: "/workflow/designer", icon: <AccountTreeIcon fontSize="small" /> },
     { label: "Istanze", to: "/workflow/instances", icon: <ListAltIcon fontSize="small" /> },
+    { label: "Token API", to: "/workflow/api-tokens", icon: <VpnKeyIcon fontSize="small" /> },
   ],
   timesheet: [{ label: "Presto disponibile", to: "#", icon: <ScheduleIcon fontSize="small" /> }],
   ticket: [{ label: "Presto disponibile", to: "#", icon: <ConfirmationNumberIcon fontSize="small" /> }],

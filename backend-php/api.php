@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/includes/crypto.php';
+require_once __DIR__ . '/includes/jwt.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/tenant.php';
 require_once __DIR__ . '/includes/audit.php';
@@ -36,7 +38,7 @@ switch ($action) {
         if (!empty($input['password'])) { $fields[] = 'password_hash = ?'; $params[] = password_hash($input['password'], PASSWORD_DEFAULT); }
         if (isset($input['phone'])) { $fields[] = 'phone = ?'; $params[] = $input['phone']; }
         if (isset($input['jobTitle'])) { $fields[] = 'job_title = ?'; $params[] = $input['jobTitle']; }
-        if (isset($input['notes'])) { $fields[] = 'notes = ?'; $params[] = $input['notes']; }
+        if (isset($input['notes'])) { $fields[] = 'notes = ?'; $params[] = encrypt_data($input['notes']); }
         if (!empty($input['avatarBase64'])) {
             $avatarName = save_avatar($input['avatarBase64'], $input['avatarMimeType'] ?? 'image/jpeg');
             if ($avatarName) { $fields[] = 'avatar_path = ?'; $params[] = $avatarName; }
@@ -50,7 +52,7 @@ switch ($action) {
         $u = $stmt->fetch(PDO::FETCH_ASSOC);
         json_response([
             'id' => $u['id'], 'email' => $u['email'], 'fullName' => $u['full_name'], 'isSuperAdmin' => (bool) $u['is_super_admin'],
-            'phone' => $u['phone'], 'jobTitle' => $u['job_title'], 'notes' => $u['notes'], 'hasAvatar' => !empty($u['avatar_path']),
+            'phone' => $u['phone'], 'jobTitle' => $u['job_title'], 'notes' => decrypt_data($u['notes']), 'hasAvatar' => !empty($u['avatar_path']),
         ]);
         break;
 
@@ -67,13 +69,21 @@ switch ($action) {
         }
 
         $stmt = db()->prepare('
-            SELECT wi.id, wi.code, wi.status, w.name as workflow_name FROM workflow_instances wi
+            SELECT wi.id, wi.code, wi.status, wi.data_json, w.name as workflow_name FROM workflow_instances wi
             JOIN workflows w ON w.id = wi.workflow_id
-            WHERE w.company_id = ? AND (wi.code LIKE ? OR wi.data_json LIKE ?) LIMIT 8
+            WHERE w.company_id = ? ORDER BY wi.updated_at DESC LIMIT 200
         ');
-        $stmt->execute([$ctx['companyId'], $q, $q]);
+        $stmt->execute([$ctx['companyId']]);
+        $needle = strtolower($input['query']);
+        $matches = 0;
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $i) {
-            $results[] = ['type' => 'instance', 'id' => $i['id'], 'label' => $i['code'], 'subtitle' => $i['workflow_name'] . ' — ' . $i['status'], 'link' => '/workflow/instances'];
+            if ($matches >= 8) break;
+            $codeMatches = stripos($i['code'], $input['query']) !== false;
+            $dataMatches = strpos(strtolower(decrypt_data($i['data_json'])), $needle) !== false;
+            if ($codeMatches || $dataMatches) {
+                $results[] = ['type' => 'instance', 'id' => $i['id'], 'label' => $i['code'], 'subtitle' => $i['workflow_name'] . ' — ' . $i['status'], 'link' => '/workflow/instances'];
+                $matches++;
+            }
         }
 
         if ($user['is_super_admin']) {
@@ -268,7 +278,6 @@ switch ($action) {
         if (!empty($input['openClosed']) && $input['openClosed'] === 'open') { $where[] = "wi.status NOT IN ('COMPLETATO', 'ANNULLATO')"; }
         if (!empty($input['openClosed']) && $input['openClosed'] === 'closed') { $where[] = "wi.status IN ('COMPLETATO', 'ANNULLATO')"; }
         if (!empty($input['code'])) { $where[] = 'wi.code LIKE ?'; $params[] = '%' . $input['code'] . '%'; }
-        if (!empty($input['anagrafica'])) { $where[] = 'wi.data_json LIKE ?'; $params[] = '%' . $input['anagrafica'] . '%'; }
         if (!empty($input['dateFrom'])) { $where[] = 'date(wi.created_at) >= date(?)'; $params[] = $input['dateFrom']; }
         if (!empty($input['dateTo'])) { $where[] = 'date(wi.created_at) <= date(?)'; $params[] = $input['dateTo']; }
 
@@ -282,6 +291,16 @@ switch ($action) {
         ");
         $stmt->execute($params);
         $allRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // I dati dell'ordine sono cifrati a riposo: la ricerca per anagrafica
+        // decifra e confronta lato PHP invece di un LIKE diretto in SQL.
+        if (!empty($input['anagrafica'])) {
+            $needle = strtolower($input['anagrafica']);
+            $allRows = array_values(array_filter($allRows, function ($r) use ($needle) {
+                $plain = decrypt_data($r['data_json']);
+                return strpos(strtolower($plain), $needle) !== false;
+            }));
+        }
 
         if ($isOperator) {
             // Un operatore vede un'istanza se l'ha creata, se ha gia' risolto un
@@ -370,30 +389,9 @@ switch ($action) {
         require_fields($input, ['workflowId']);
         $ctx = require_company($user, $input['companyId'] ?? null);
 
-        $stmt = db()->prepare('SELECT * FROM workflows WHERE id = ? AND company_id = ? AND status = "PUBLISHED"');
-        $stmt->execute([$input['workflowId'], $ctx['companyId']]);
-        $w = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$w) error_response('Workflow pubblicato non trovato', 404);
-
-        $vStmt = db()->prepare('SELECT * FROM workflow_versions WHERE workflow_id = ? ORDER BY version DESC LIMIT 1');
-        $vStmt->execute([$w['id']]);
-        $version = $vStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$version) error_response('Nessuna versione pubblicata', 404);
-
-        $cStmt = db()->prepare('SELECT COUNT(*) as c FROM workflow_instances wi JOIN workflows w2 ON w2.id = wi.workflow_id WHERE w2.company_id = ?');
-        $cStmt->execute([$ctx['companyId']]);
-        $count = (int) $cStmt->fetch(PDO::FETCH_ASSOC)['c'];
-        $code = 'Richiesta #' . (1000 + $count + 1);
-
-        $id = new_id('inst');
-        db()->prepare('
-            INSERT INTO workflow_instances (id, workflow_id, workflow_version_id, code, data_json, created_by_id, status)
-            VALUES (?, ?, ?, ?, "{}", ?, "BOZZA")
-        ')->execute([$id, $w['id'], $version['id'], $code, $user['id']]);
-
-        log_audit($ctx['companyId'], $user['id'], $id, 'Creazione istanza "' . $code . '"');
-        advance_instance($id);
-        json_response(['id' => $id, 'code' => $code], 201);
+        $result = create_instance($ctx['companyId'], $input['workflowId'], $user['id']);
+        if (isset($result['error'])) error_response($result['error'], 404);
+        json_response($result, 201);
         break;
 
     case 'instances.get':
@@ -417,8 +415,8 @@ switch ($action) {
             error_response('Non sei tra i responsabili di questo passaggio', 403);
         }
 
-        $data = array_merge(json_decode($instance['data_json'], true) ?: [], $input['values'] ?? []);
-        db()->prepare('UPDATE workflow_instances SET data_json = ? WHERE id = ?')->execute([json_encode($data), $instance['id']]);
+        $data = array_merge(json_decode(decrypt_data($instance['data_json']), true) ?: [], $input['values'] ?? []);
+        db()->prepare('UPDATE workflow_instances SET data_json = ? WHERE id = ?')->execute([encrypt_data(json_encode($data)), $instance['id']]);
         db()->prepare('UPDATE workflow_tasks SET status = "COMPLETATO", resolved_at = datetime("now"), assigned_to_id = ? WHERE id = ?')
             ->execute([$user['id'], $input['taskId']]);
 
@@ -508,10 +506,10 @@ switch ($action) {
         if ($binary === false) error_response('File non valido', 400);
         if (strlen($binary) > 8 * 1024 * 1024) error_response('File troppo grande (max 8MB)', 400);
 
-        $attachDir = __DIR__ . '/../data/attachments';
+        $attachDir = __DIR__ . '/data/attachments';
         if (!is_dir($attachDir)) mkdir($attachDir, 0755, true);
         $storedName = new_id('file') . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $input['fileName']);
-        file_put_contents($attachDir . '/' . $storedName, $binary);
+        file_put_contents($attachDir . '/' . $storedName, encrypt_bytes($binary));
 
         $id = new_id('att');
         db()->prepare('
@@ -547,6 +545,53 @@ switch ($action) {
         require_role($ctx['roleKey'], ['ADMIN']);
         require_fields($input, ['id']);
         db()->prepare('DELETE FROM node_templates WHERE id = ? AND company_id = ?')->execute([$input['id'], $ctx['companyId']]);
+        json_response(['ok' => true]);
+        break;
+
+    case 'apiTokens.list':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        require_role($ctx['roleKey'], ['ADMIN']);
+        $stmt = db()->prepare('
+            SELECT t.id, t.label, t.workflow_id, t.created_at, t.revoked, w.name as workflow_name
+            FROM api_tokens t LEFT JOIN workflows w ON w.id = t.workflow_id
+            WHERE t.company_id = ? ORDER BY t.created_at DESC
+        ');
+        $stmt->execute([$ctx['companyId']]);
+        json_response(array_map(fn($t) => [
+            'id' => $t['id'], 'label' => $t['label'], 'workflowId' => $t['workflow_id'], 'workflowName' => $t['workflow_name'],
+            'createdAt' => $t['created_at'], 'revoked' => (bool) $t['revoked'],
+        ], $stmt->fetchAll(PDO::FETCH_ASSOC)));
+        break;
+
+    case 'apiTokens.create':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        require_role($ctx['roleKey'], ['ADMIN']);
+        require_fields($input, ['label']);
+
+        $workflowId = !empty($input['workflowId']) ? $input['workflowId'] : null;
+        if ($workflowId) {
+            $stmt = db()->prepare('SELECT id FROM workflows WHERE id = ? AND company_id = ?');
+            $stmt->execute([$workflowId, $ctx['companyId']]);
+            if (!$stmt->fetch()) error_response('Workflow non trovato', 404);
+        }
+
+        $id = new_id('tok');
+        $jti = new_id('jti');
+        db()->prepare('INSERT INTO api_tokens (id, company_id, workflow_id, label, jti, created_by_id) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([$id, $ctx['companyId'], $workflowId, $input['label'], $jti, $user['id']]);
+
+        // Token senza scadenza (revocabile in qualsiasi momento tramite jti):
+        // funziona quindi sia come JWT "vero" sia come API key stabile per integrazioni esterne.
+        $token = jwt_encode(['type' => 'external_order', 'companyId' => $ctx['companyId'], 'workflowId' => $workflowId, 'jti' => $jti]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Token API creato: "' . $input['label'] . '"');
+        json_response(['id' => $id, 'token' => $token], 201);
+        break;
+
+    case 'apiTokens.revoke':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        require_role($ctx['roleKey'], ['ADMIN']);
+        require_fields($input, ['id']);
+        db()->prepare('UPDATE api_tokens SET revoked = 1 WHERE id = ? AND company_id = ?')->execute([$input['id'], $ctx['companyId']]);
         json_response(['ok' => true]);
         break;
 
@@ -594,7 +639,7 @@ switch ($action) {
         ')->execute([
             $newId, $input['email'], password_hash($input['password'], PASSWORD_DEFAULT), $input['fullName'],
             $userType === 'SUPERADMIN' ? 1 : 0, $userType,
-            $input['phone'] ?? null, $input['jobTitle'] ?? null, $input['notes'] ?? null, $avatarName,
+            $input['phone'] ?? null, $input['jobTitle'] ?? null, !empty($input['notes']) ? encrypt_data($input['notes']) : null, $avatarName,
         ]);
         json_response(['id' => $newId], 201);
         break;
@@ -614,7 +659,7 @@ switch ($action) {
         if (!empty($input['password'])) { $fields[] = 'password_hash = ?'; $params[] = password_hash($input['password'], PASSWORD_DEFAULT); }
         if (isset($input['phone'])) { $fields[] = 'phone = ?'; $params[] = $input['phone']; }
         if (isset($input['jobTitle'])) { $fields[] = 'job_title = ?'; $params[] = $input['jobTitle']; }
-        if (isset($input['notes'])) { $fields[] = 'notes = ?'; $params[] = $input['notes']; }
+        if (isset($input['notes'])) { $fields[] = 'notes = ?'; $params[] = encrypt_data($input['notes']); }
         if (!empty($input['avatarBase64'])) {
             $avatarName = save_avatar($input['avatarBase64'], $input['avatarMimeType'] ?? 'image/jpeg');
             if ($avatarName) { $fields[] = 'avatar_path = ?'; $params[] = $avatarName; }
@@ -886,6 +931,7 @@ function fetch_instance_detail(string $id, string $companyId, ?string $requestin
     return [
         'id' => $instance['id'], 'code' => $instance['code'], 'status' => $instance['status'],
         'currentNodeId' => $instance['current_node_id'], 'createdById' => $instance['created_by_id'],
+        'originInstanceId' => $instance['origin_instance_id'],
         'workflow' => ['id' => $workflow['id'], 'name' => $workflow['name']],
         'workflowVersion' => ['nodesJson' => $version['nodes_json'], 'edgesJson' => $version['edges_json']],
         'tasks' => $tasks, 'comments' => $comments, 'attachments' => $attachments, 'aiDecisions' => $aiDecisions, 'auditLogs' => $auditLogs,

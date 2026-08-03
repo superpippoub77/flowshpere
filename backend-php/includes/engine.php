@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/audit.php';
+require_once __DIR__ . '/crypto.php';
 
 // Se il responsabile di uno step e' impostato esattamente su "AI", il passo
 // si risolve da solo (nessun umano deve intervenire).
@@ -8,6 +9,38 @@ function is_ai_responsible(array $node): bool
 {
     $ids = $node['data']['config']['responsibleUserIds'] ?? [];
     return count($ids) === 1 && $ids[0] === 'AI';
+}
+
+// Crea una nuova istanza (workflow pubblicato), con dati iniziali opzionali
+// (es. da un ordine esterno gia' pronto) e un riferimento opzionale
+// all'istanza di origine (concatenamento tra workflow). Ritorna
+// ['id'=>..., 'code'=>...] oppure ['error'=>...].
+function create_instance(string $companyId, string $workflowId, string $createdByUserId, array $initialData = [], ?string $originInstanceId = null): array
+{
+    $stmt = db()->prepare('SELECT * FROM workflows WHERE id = ? AND company_id = ? AND status = "PUBLISHED"');
+    $stmt->execute([$workflowId, $companyId]);
+    $w = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$w) return ['error' => 'Workflow pubblicato non trovato'];
+
+    $vStmt = db()->prepare('SELECT * FROM workflow_versions WHERE workflow_id = ? ORDER BY version DESC LIMIT 1');
+    $vStmt->execute([$w['id']]);
+    $version = $vStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$version) return ['error' => 'Nessuna versione pubblicata'];
+
+    $cStmt = db()->prepare('SELECT COUNT(*) as c FROM workflow_instances wi JOIN workflows w2 ON w2.id = wi.workflow_id WHERE w2.company_id = ?');
+    $cStmt->execute([$companyId]);
+    $count = (int) $cStmt->fetch(PDO::FETCH_ASSOC)['c'];
+    $code = 'Richiesta #' . (1000 + $count + 1);
+
+    $id = new_id('inst');
+    db()->prepare('
+        INSERT INTO workflow_instances (id, workflow_id, workflow_version_id, code, data_json, origin_instance_id, created_by_id, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, "BOZZA")
+    ')->execute([$id, $w['id'], $version['id'], $code, encrypt_data(json_encode($initialData)), $originInstanceId, $createdByUserId]);
+
+    log_audit($companyId, $createdByUserId, $id, 'Creazione istanza "' . $code . '"' . ($originInstanceId ? ' (collegata automaticamente da un workflow precedente)' : ''));
+    advance_instance($id);
+    return ['id' => $id, 'code' => $code];
 }
 
 function find_outgoing(array $edges, string $nodeId, ?string $handle = null): ?array
@@ -148,7 +181,7 @@ function advance_instance(string $instanceId): void
 
     $nodes = json_decode($instance['nodes_json'], true);
     $edges = json_decode($instance['edges_json'], true);
-    $data = json_decode($instance['data_json'], true) ?: [];
+    $data = json_decode(decrypt_data($instance['data_json']), true) ?: [];
     $companyId = $instance['company_id'];
 
     $findNode = function (?string $id) use ($nodes) {
@@ -176,6 +209,17 @@ function advance_instance(string $instanceId): void
         }
 
         if ($type === 'form') {
+            $fields = $node['data']['config']['fields'] ?? [];
+            $allProvided = count($fields) > 0;
+            foreach ($fields as $f) {
+                if (!isset($data[$f['id']]) || $data[$f['id']] === '') { $allProvided = false; break; }
+            }
+            if ($allProvided) {
+                log_audit($companyId, null, $instanceId, 'Form "' . ($node['data']['label'] ?? '') . '" gia\' compilato dai dati forniti (es. da un ordine esterno)');
+                $next = find_outgoing($edges, $node['id']);
+                $currentId = $next['target'] ?? null;
+                continue;
+            }
             ensure_task($instanceId, $node);
             set_current_node($instanceId, $node['id'], 'IN_CORSO');
             return;
@@ -273,6 +317,14 @@ function advance_instance(string $instanceId): void
             db()->prepare('UPDATE workflow_instances SET status = "COMPLETATO", current_node_id = ?, updated_at = datetime("now") WHERE id = ?')
                 ->execute([$node['id'], $instanceId]);
             log_audit($companyId, null, $instanceId, 'Processo completato');
+
+            $nextWorkflowId = $node['data']['config']['nextWorkflowId'] ?? null;
+            if ($nextWorkflowId) {
+                $result = create_instance($companyId, $nextWorkflowId, $instance['created_by_id'], $data, $instanceId);
+                if (!isset($result['error'])) {
+                    log_audit($companyId, null, $instanceId, 'Collegato automaticamente al workflow successivo: "' . $result['code'] . '"');
+                }
+            }
             return;
         }
 
