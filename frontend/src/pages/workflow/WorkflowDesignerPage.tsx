@@ -57,6 +57,7 @@ function DesignerInner() {
   const [templateDialog, setTemplateDialog] = useState<{ open: boolean; label: string }>({ open: false, label: "" });
   const [nodeMenu, setNodeMenu] = useState<{ mouseX: number; mouseY: number; nodeId: string } | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
+  const [edgeMenu, setEdgeMenu] = useState<{ mouseX: number; mouseY: number; edgeId: string } | null>(null);
 
   const GRID_SIZE = 20;
 
@@ -75,6 +76,11 @@ function DesignerInner() {
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
     if (selectedId === nodeId) setSelectedId(null);
     setNodeMenu(null);
+  }
+
+  function deleteEdgeById(edgeId: string) {
+    setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+    setEdgeMenu(null);
   }
 
   function alignAllToGrid() {
@@ -308,18 +314,28 @@ function DesignerInner() {
               setSelectedId(null);
               setNodeMenu(null);
               setPaneMenu(null);
+              setEdgeMenu(null);
             }}
             onNodeContextMenu={(event, n) => {
               event.preventDefault();
               setPaneMenu(null);
+              setEdgeMenu(null);
               setSelectedId(n.id);
               setNodeMenu({ mouseX: event.clientX, mouseY: event.clientY, nodeId: n.id });
+            }}
+            onEdgeContextMenu={(event, e) => {
+              event.preventDefault();
+              setNodeMenu(null);
+              setPaneMenu(null);
+              setEdgeMenu({ mouseX: event.clientX, mouseY: event.clientY, edgeId: e.id });
             }}
             onPaneContextMenu={(event) => {
               event.preventDefault();
               setNodeMenu(null);
+              setEdgeMenu(null);
               setPaneMenu({ mouseX: (event as React.MouseEvent).clientX, mouseY: (event as React.MouseEvent).clientY });
             }}
+            deleteKeyCode={["Backspace", "Delete"]}
             snapToGrid
             snapGrid={[GRID_SIZE, GRID_SIZE]}
             fitView
@@ -341,6 +357,18 @@ function DesignerInner() {
             <MenuItem onClick={() => nodeMenu && deleteNodeById(nodeMenu.nodeId)}>
               <ListItemIcon><DeleteOutlineIcon fontSize="small" /></ListItemIcon>
               Elimina blocco
+            </MenuItem>
+          </Menu>
+
+          <Menu
+            open={!!edgeMenu}
+            onClose={() => setEdgeMenu(null)}
+            anchorReference="anchorPosition"
+            anchorPosition={edgeMenu ? { top: edgeMenu.mouseY, left: edgeMenu.mouseX } : undefined}
+          >
+            <MenuItem onClick={() => edgeMenu && deleteEdgeById(edgeMenu.edgeId)}>
+              <ListItemIcon><DeleteOutlineIcon fontSize="small" /></ListItemIcon>
+              Elimina connessione
             </MenuItem>
           </Menu>
 
