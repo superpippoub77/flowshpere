@@ -26,6 +26,7 @@ import EditIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { api, getAvatarUrl } from "../../api/client";
 import { AvatarPicker } from "../../components/AvatarPicker";
+import { PasswordField } from "../../components/PasswordField";
 
 const TYPE_LABEL: Record<string, { label: string; color: any }> = {
   SUPERADMIN: { label: "Super Amministratore", color: "error" },
@@ -166,9 +167,8 @@ export function AdminUsersPage() {
             <TextField label="Telefono" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} fullWidth />
             <TextField label="Ruolo / posizione" value={form.jobTitle} onChange={(e) => setForm((f) => ({ ...f, jobTitle: e.target.value }))} fullWidth />
             <TextField label="Note" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} fullWidth multiline minRows={2} />
-            <TextField
+            <PasswordField
               label={editingId ? "Nuova password (lascia vuoto per non cambiarla)" : "Password"}
-              type="password"
               value={form.password}
               onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
               fullWidth

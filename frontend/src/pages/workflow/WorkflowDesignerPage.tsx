@@ -41,7 +41,7 @@ import { api } from "../../api/client";
 import { useStatusStore } from "../../store/statusStore";
 import { NODE_PALETTE, nodeTypes } from "./nodeTypes";
 
-const FIELD_TYPES = ["text", "textarea", "numero", "valuta", "data", "checkbox", "select", "radio", "allegato", "firma"];
+const FIELD_TYPES = ["text", "textarea", "numero", "valuta", "data", "checkbox", "select", "radio", "allegato", "firma", "anagrafica"];
 
 function DesignerInner() {
   const { id } = useParams();

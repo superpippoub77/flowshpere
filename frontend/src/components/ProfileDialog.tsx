@@ -5,6 +5,7 @@ import { api, getAvatarUrl } from "../api/client";
 import { useAuthStore } from "../store/authStore";
 import { useI18n } from "../i18n";
 import { AvatarPicker } from "./AvatarPicker";
+import { PasswordField } from "./PasswordField";
 
 export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n();
@@ -52,9 +53,8 @@ export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () =>
           <TextField label="Telefono" value={phone} onChange={(e) => setPhone(e.target.value)} fullWidth />
           <TextField label="Ruolo / posizione" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} fullWidth />
           <TextField label="Note" value={notes} onChange={(e) => setNotes(e.target.value)} fullWidth multiline minRows={2} />
-          <TextField
+          <PasswordField
             label={t("new_password")}
-            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             fullWidth

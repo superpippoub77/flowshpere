@@ -131,6 +131,18 @@ function run_migrations(PDO $pdo): void
             )
         ");
     }
+
+    if (!$tableExists('customers')) {
+        $pdo->exec("
+            CREATE TABLE customers (
+                id TEXT PRIMARY KEY,
+                company_id TEXT NOT NULL REFERENCES companies(id),
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(company_id, name)
+            )
+        ");
+    }
 }
 
 function new_id(string $prefix = ''): string
@@ -284,6 +296,14 @@ function create_schema(PDO $pdo): void
             created_by_id TEXT NOT NULL REFERENCES users(id),
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             revoked INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE customers (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id),
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(company_id, name)
         );
 
         CREATE TABLE ai_decisions (

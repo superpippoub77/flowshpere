@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Paper, TextField, Button, Typography, Alert, Stack } from "@mui/material";
+import { PasswordField } from "../components/PasswordField";
 import { api } from "../api/client";
 import { useAuthStore } from "../store/authStore";
 
@@ -61,9 +62,8 @@ export function LoginPage() {
               fullWidth
               required
             />
-            <TextField
+            <PasswordField
               label="Password"
-              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               fullWidth

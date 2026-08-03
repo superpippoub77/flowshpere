@@ -595,6 +595,29 @@ switch ($action) {
         json_response(['ok' => true]);
         break;
 
+    case 'customers.search':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        $q = '%' . ($input['query'] ?? '') . '%';
+        $stmt = db()->prepare('SELECT id, name FROM customers WHERE company_id = ? AND name LIKE ? ORDER BY name LIMIT 10');
+        $stmt->execute([$ctx['companyId'], $q]);
+        json_response($stmt->fetchAll(PDO::FETCH_ASSOC));
+        break;
+
+    case 'customers.create':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        require_fields($input, ['name']);
+        $name = trim($input['name']);
+
+        $stmt = db()->prepare('SELECT id, name FROM customers WHERE company_id = ? AND name = ?');
+        $stmt->execute([$ctx['companyId'], $name]);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($existing) json_response($existing);
+
+        $id = new_id('cust');
+        db()->prepare('INSERT INTO customers (id, company_id, name) VALUES (?, ?, ?)')->execute([$id, $ctx['companyId'], $name]);
+        json_response(['id' => $id, 'name' => $name], 201);
+        break;
+
     case 'companies.users':
         $ctx = require_company($user, $input['companyId'] ?? null);
         $stmt = db()->prepare('

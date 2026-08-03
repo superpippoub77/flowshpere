@@ -30,6 +30,7 @@ import { useAuthStore } from "../../store/authStore";
 import { computeMainSequence, FlowNode } from "./StepDots";
 import { RichTextEditor } from "./RichTextEditor";
 import { AttachmentDropzone } from "./AttachmentDropzone";
+import { CustomerAutocomplete } from "../../components/CustomerAutocomplete";
 
 const STATUS_COLOR: Record<string, any> = {
   BOZZA: "default",
@@ -377,17 +378,26 @@ export function InstanceDrawer({
 
                   {dialogIsActive && authorized && openTask?.nodeType === "form" && (
                     <Stack spacing={2}>
-                      {(dialogNode.node.data.config?.fields ?? []).map((f: any) => (
-                        <TextField
-                          key={f.id}
-                          label={f.label}
-                          multiline={f.type === "textarea"}
-                          type={f.type === "numero" || f.type === "valuta" ? "number" : "text"}
-                          value={formValues[f.id] ?? ""}
-                          onChange={(e) => setFormValues((v) => ({ ...v, [f.id]: e.target.value }))}
-                          fullWidth
-                        />
-                      ))}
+                      {(dialogNode.node.data.config?.fields ?? []).map((f: any) =>
+                        f.type === "anagrafica" ? (
+                          <CustomerAutocomplete
+                            key={f.id}
+                            label={f.label}
+                            value={formValues[f.id] ?? ""}
+                            onChange={(name) => setFormValues((v) => ({ ...v, [f.id]: name }))}
+                          />
+                        ) : (
+                          <TextField
+                            key={f.id}
+                            label={f.label}
+                            multiline={f.type === "textarea"}
+                            type={f.type === "numero" || f.type === "valuta" ? "number" : "text"}
+                            value={formValues[f.id] ?? ""}
+                            onChange={(e) => setFormValues((v) => ({ ...v, [f.id]: e.target.value }))}
+                            fullWidth
+                          />
+                        )
+                      )}
                     </Stack>
                   )}
 

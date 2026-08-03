@@ -28,6 +28,7 @@ import AddIcon from "@mui/icons-material/Add";
 import TimelineIcon from "@mui/icons-material/TimelineOutlined";
 import dayjs from "dayjs";
 import { api } from "../../api/client";
+import { ClearableTextField } from "../../components/ClearableTextField";
 import { StepDots, computeMainSequence, computeStepStatuses } from "./StepDots";
 import { InstanceDrawer } from "./InstanceDrawer";
 
@@ -148,7 +149,7 @@ export function InstanceListPage() {
       <Paper sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={1.5}>
           <Grid item xs={6} sm={3} md={2}>
-            <TextField label="N. ordine" size="small" fullWidth value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} />
+            <ClearableTextField label="N. ordine" size="small" fullWidth value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} />
           </Grid>
           <Grid item xs={6} sm={3} md={2}>
             <TextField select label="Workflow" size="small" fullWidth value={filters.workflowId} onChange={(e) => updateFilter("workflowId", e.target.value)}>
@@ -171,7 +172,7 @@ export function InstanceListPage() {
             </TextField>
           </Grid>
           <Grid item xs={6} sm={3} md={2}>
-            <TextField
+            <ClearableTextField
               label="Anagrafica"
               size="small"
               fullWidth
