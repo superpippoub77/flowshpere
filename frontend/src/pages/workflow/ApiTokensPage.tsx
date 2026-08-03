@@ -25,6 +25,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ContentCopyIcon from "@mui/icons-material/ContentCopyOutlined";
 import { api } from "../../api/client";
+import { ClearableTextField } from "../../components/ClearableTextField";
 
 export function ApiTokensPage() {
   const queryClient = useQueryClient();
@@ -56,6 +57,11 @@ export function ApiTokensPage() {
 
   const revokeMutation = useMutation({
     mutationFn: async (id: string) => api.post(`/api-tokens/${id}/revoke`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["api-tokens"] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => api.post(`/api-tokens/${id}/delete`, {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["api-tokens"] }),
   });
 
@@ -104,10 +110,20 @@ export function ApiTokensPage() {
                 </TableCell>
                 <TableCell align="right">
                   {!t.revoked && (
-                    <IconButton size="small" onClick={() => revokeMutation.mutate(t.id)}>
-                      <DeleteOutlineIcon fontSize="small" />
-                    </IconButton>
+                    <Button size="small" onClick={() => revokeMutation.mutate(t.id)}>
+                      Disattiva
+                    </Button>
                   )}
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      if (window.confirm(`Eliminare definitivamente il token "${t.label}"? L'operazione non e' reversibile.`)) {
+                        deleteMutation.mutate(t.id);
+                      }
+                    }}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
                 </TableCell>
               </TableRow>
             ))}
@@ -129,7 +145,7 @@ export function ApiTokensPage() {
         <DialogContent>
           {!issuedToken && (
             <Stack spacing={2} sx={{ mt: 1 }}>
-              <TextField label="Etichetta" placeholder="es. Integrazione e-commerce" value={label} onChange={(e) => setLabel(e.target.value)} fullWidth autoFocus />
+              <ClearableTextField label="Etichetta" placeholder="es. Integrazione e-commerce" value={label} onChange={(e) => setLabel(e.target.value)} fullWidth autoFocus />
               <TextField select label="Vincola a un workflow (opzionale)" value={workflowId} onChange={(e) => setWorkflowId(e.target.value)} fullWidth>
                 <MenuItem value="">Qualsiasi workflow (specificato in ogni chiamata)</MenuItem>
                 {(workflows ?? []).filter((w: any) => w.status === "PUBLISHED").map((w: any) => (

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Paper, TextField, Button, Typography, Alert, Stack } from "@mui/material";
 import { PasswordField } from "../components/PasswordField";
+import { ClearableTextField } from "../components/ClearableTextField";
 import { api } from "../api/client";
 import { useAuthStore } from "../store/authStore";
 
@@ -54,7 +55,7 @@ export function LoginPage() {
         <form onSubmit={handleSubmit}>
           <Stack spacing={2}>
             {error && <Alert severity="error">{error}</Alert>}
-            <TextField
+            <ClearableTextField
               label="Email"
               type="email"
               value={email}

@@ -27,6 +27,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { api, getAvatarUrl } from "../../api/client";
 import { AvatarPicker } from "../../components/AvatarPicker";
 import { PasswordField } from "../../components/PasswordField";
+import { ClearableTextField } from "../../components/ClearableTextField";
 
 const TYPE_LABEL: Record<string, { label: string; color: any }> = {
   SUPERADMIN: { label: "Super Amministratore", color: "error" },
@@ -162,11 +163,11 @@ export function AdminUsersPage() {
               fallbackText={form.fullName?.[0] ?? "?"}
               onPick={({ base64, mimeType }) => setAvatar({ base64, mimeType })}
             />
-            <TextField label="Nome completo" value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} fullWidth />
-            <TextField label="Email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} fullWidth />
-            <TextField label="Telefono" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} fullWidth />
-            <TextField label="Ruolo / posizione" value={form.jobTitle} onChange={(e) => setForm((f) => ({ ...f, jobTitle: e.target.value }))} fullWidth />
-            <TextField label="Note" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} fullWidth multiline minRows={2} />
+            <ClearableTextField label="Nome completo" value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} fullWidth />
+            <ClearableTextField label="Email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} fullWidth />
+            <ClearableTextField label="Telefono" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} fullWidth />
+            <ClearableTextField label="Ruolo / posizione" value={form.jobTitle} onChange={(e) => setForm((f) => ({ ...f, jobTitle: e.target.value }))} fullWidth />
+            <ClearableTextField label="Note" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} fullWidth multiline minRows={2} />
             <PasswordField
               label={editingId ? "Nuova password (lascia vuoto per non cambiarla)" : "Password"}
               value={form.password}

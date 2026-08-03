@@ -38,6 +38,7 @@ import SaveIcon from "@mui/icons-material/SaveOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopyOutlined";
 import Magnet from "@mui/icons-material/GridOnOutlined";
 import { api } from "../../api/client";
+import { ClearableTextField } from "../../components/ClearableTextField";
 import { useStatusStore } from "../../store/statusStore";
 import { NODE_PALETTE, nodeTypes } from "./nodeTypes";
 
@@ -274,7 +275,7 @@ function DesignerInner() {
           <IconButton size="small" onClick={() => navigate("/workflow/designer")}>
             <ArrowBackIcon fontSize="small" />
           </IconButton>
-          <TextField
+          <ClearableTextField
             variant="standard"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -369,7 +370,7 @@ function DesignerInner() {
         )}
         {selectedNode && (
           <Stack spacing={2} sx={{ mt: 2 }}>
-            <TextField
+            <ClearableTextField
               label="Etichetta"
               size="small"
               value={selectedNode.data.label}
@@ -407,7 +408,7 @@ function DesignerInner() {
             )}
 
             {selectedNode.type === "email" && (
-              <TextField
+              <ClearableTextField
                 label="Testo notifica"
                 size="small"
                 multiline
@@ -460,7 +461,7 @@ function DesignerInner() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Il blocco sara' disponibile nella palette per tutti quelli che progettano workflow in questa azienda.
           </Typography>
-          <TextField
+          <ClearableTextField
             label="Nome del blocco"
             fullWidth
             autoFocus
@@ -594,7 +595,7 @@ function FormFieldsEditor({ fields, onChange }: { fields: any[]; onChange: (f: a
       </Typography>
       {fields.map((f, i) => (
         <Stack key={i} direction="row" spacing={0.5} alignItems="center">
-          <TextField
+          <ClearableTextField
             size="small"
             placeholder="etichetta"
             value={f.label}
@@ -644,7 +645,7 @@ function RuleEditor({ rule, onChange }: { rule: any; onChange: (r: any) => void 
       <Typography variant="caption" color="text.secondary">
         Regola (percorso "approve" se vera)
       </Typography>
-      <TextField
+      <ClearableTextField
         size="small"
         label="Campo (id del form)"
         value={rule.field}
@@ -657,7 +658,7 @@ function RuleEditor({ rule, onChange }: { rule: any; onChange: (r: any) => void 
           </MenuItem>
         ))}
       </TextField>
-      <TextField size="small" label="Valore" value={rule.value} onChange={(e) => onChange({ ...rule, value: e.target.value })} />
+      <ClearableTextField size="small" label="Valore" value={rule.value} onChange={(e) => onChange({ ...rule, value: e.target.value })} />
     </Stack>
   );
 }

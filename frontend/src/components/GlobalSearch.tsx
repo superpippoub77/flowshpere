@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Box, InputBase, Paper, List, ListItemButton, ListItemText, Chip, ClickAwayListener } from "@mui/material";
+import { Box, InputBase, Paper, List, ListItemButton, ListItemText, Chip, ClickAwayListener, IconButton } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
 import { api } from "../api/client";
 import { useI18n } from "../i18n";
 
@@ -49,6 +50,11 @@ export function GlobalSearch() {
             fullWidth
             sx={{ fontSize: 14 }}
           />
+          {query.length > 0 && (
+            <IconButton size="small" onClick={() => setQuery("")} tabIndex={-1}>
+              <ClearIcon fontSize="small" />
+            </IconButton>
+          )}
         </Paper>
 
         {open && debounced.length >= 2 && (

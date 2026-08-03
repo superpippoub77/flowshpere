@@ -22,6 +22,7 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { api } from "../../api/client";
+import { ClearableTextField } from "../../components/ClearableTextField";
 
 export function AdminCompaniesPage() {
   const queryClient = useQueryClient();
@@ -121,7 +122,7 @@ export function AdminCompaniesPage() {
       <Dialog open={open} onClose={closeDialog} fullWidth maxWidth="xs">
         <DialogTitle>{editingId ? "Modifica azienda" : "Nuova azienda"}</DialogTitle>
         <DialogContent>
-          <TextField label="Nome azienda" value={name} onChange={(e) => setName(e.target.value)} fullWidth sx={{ mt: 1 }} autoFocus />
+          <ClearableTextField label="Nome azienda" value={name} onChange={(e) => setName(e.target.value)} fullWidth sx={{ mt: 1 }} autoFocus />
         </DialogContent>
         <DialogActions>
           <Button onClick={closeDialog}>Annulla</Button>

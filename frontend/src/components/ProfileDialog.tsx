@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, Stack } from "@mui/material";
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Stack } from "@mui/material";
 import { api, getAvatarUrl } from "../api/client";
 import { useAuthStore } from "../store/authStore";
 import { useI18n } from "../i18n";
 import { AvatarPicker } from "./AvatarPicker";
 import { PasswordField } from "./PasswordField";
+import { ClearableTextField } from "./ClearableTextField";
 
 export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n();
@@ -49,10 +50,10 @@ export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () =>
             fallbackText={user?.fullName?.[0] ?? "?"}
             onPick={({ base64, mimeType }) => setAvatar({ base64, mimeType })}
           />
-          <TextField label={t("full_name")} value={fullName} onChange={(e) => setFullName(e.target.value)} fullWidth />
-          <TextField label="Telefono" value={phone} onChange={(e) => setPhone(e.target.value)} fullWidth />
-          <TextField label="Ruolo / posizione" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} fullWidth />
-          <TextField label="Note" value={notes} onChange={(e) => setNotes(e.target.value)} fullWidth multiline minRows={2} />
+          <ClearableTextField label={t("full_name")} value={fullName} onChange={(e) => setFullName(e.target.value)} fullWidth />
+          <ClearableTextField label="Telefono" value={phone} onChange={(e) => setPhone(e.target.value)} fullWidth />
+          <ClearableTextField label="Ruolo / posizione" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} fullWidth />
+          <ClearableTextField label="Note" value={notes} onChange={(e) => setNotes(e.target.value)} fullWidth multiline minRows={2} />
           <PasswordField
             label={t("new_password")}
             value={password}

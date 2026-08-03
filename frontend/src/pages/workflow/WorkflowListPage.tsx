@@ -25,6 +25,7 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
 import { api } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
+import { ClearableTextField } from "../../components/ClearableTextField";
 
 const STATUS_LABEL: Record<string, { label: string; color: any }> = {
   DRAFT: { label: "Bozza", color: "default" },
@@ -176,8 +177,8 @@ export function WorkflowListPage() {
                 ))}
               </TextField>
             )}
-            <TextField label="Nome" value={name} onChange={(e) => setName(e.target.value)} fullWidth autoFocus />
-            <TextField
+            <ClearableTextField label="Nome" value={name} onChange={(e) => setName(e.target.value)} fullWidth autoFocus />
+            <ClearableTextField
               label="Descrizione"
               value={description}
               onChange={(e) => setDescription(e.target.value)}

@@ -67,6 +67,7 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/node-templates\/([^/]+)$/, action: "nodeTemplates.delete", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/api-tokens$/, action: "__api_tokens_list_or_create__" },
   { pattern: /^\/api-tokens\/([^/]+)\/revoke$/, action: "apiTokens.revoke", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/api-tokens\/([^/]+)\/delete$/, action: "apiTokens.delete", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/customers\/search$/, action: "customers.search" },
   { pattern: /^\/customers$/, action: "customers.create" },
 

@@ -595,6 +595,14 @@ switch ($action) {
         json_response(['ok' => true]);
         break;
 
+    case 'apiTokens.delete':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        require_role($ctx['roleKey'], ['ADMIN']);
+        require_fields($input, ['id']);
+        db()->prepare('DELETE FROM api_tokens WHERE id = ? AND company_id = ?')->execute([$input['id'], $ctx['companyId']]);
+        json_response(['ok' => true]);
+        break;
+
     case 'customers.search':
         $ctx = require_company($user, $input['companyId'] ?? null);
         $q = '%' . ($input['query'] ?? '') . '%';

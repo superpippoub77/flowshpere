@@ -31,6 +31,7 @@ import { computeMainSequence, FlowNode } from "./StepDots";
 import { RichTextEditor } from "./RichTextEditor";
 import { AttachmentDropzone } from "./AttachmentDropzone";
 import { CustomerAutocomplete } from "../../components/CustomerAutocomplete";
+import { ClearableTextField } from "../../components/ClearableTextField";
 
 const STATUS_COLOR: Record<string, any> = {
   BOZZA: "default",
@@ -249,7 +250,7 @@ export function InstanceDrawer({
               )}
             </Stack>
             <Stack direction="row" spacing={1}>
-              <TextField
+              <ClearableTextField
                 size="small"
                 placeholder="Scrivi un commento..."
                 value={comment}
@@ -387,7 +388,7 @@ export function InstanceDrawer({
                             onChange={(name) => setFormValues((v) => ({ ...v, [f.id]: name }))}
                           />
                         ) : (
-                          <TextField
+                          <ClearableTextField
                             key={f.id}
                             label={f.label}
                             multiline={f.type === "textarea"}
@@ -408,7 +409,7 @@ export function InstanceDrawer({
                   )}
 
                   {dialogIsActive && authorized && (openTask?.nodeType === "approval" || openTask?.nodeType === "ai") && (
-                    <TextField
+                    <ClearableTextField
                       label="Commento (obbligatorio)"
                       value={decisionComment}
                       onChange={(e) => setDecisionComment(e.target.value)}
