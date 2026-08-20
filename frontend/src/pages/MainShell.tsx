@@ -38,6 +38,7 @@ import AccountCircleIcon from "@mui/icons-material/AccountCircleOutlined";
 import LightModeIcon from "@mui/icons-material/LightModeOutlined";
 import DarkModeIcon from "@mui/icons-material/DarkModeOutlined";
 import TranslateIcon from "@mui/icons-material/TranslateOutlined";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutlineOutlined";
 import { api, getAvatarUrl } from "../api/client";
 import { useAuthStore } from "../store/authStore";
 import { useThemeMode } from "../contexts/ThemeModeContext";
@@ -45,6 +46,7 @@ import { useI18n } from "../i18n";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { ProfileDialog } from "../components/ProfileDialog";
 import { StatusBar } from "../components/StatusBar";
+import { HelpWizard } from "../components/HelpWizard";
 
 const APP_OPERATIONS: Record<string, { label: string; to: string; icon: JSX.Element; adminOnly?: boolean }[]> = {
   workflow: [
@@ -121,6 +123,7 @@ export function MainShell() {
   }, [list, currentCompanyId, setCurrentCompany]);
 
   const [openApps, setOpenApps] = useState<Record<string, boolean>>({ workflow: true });
+  const [helpAppKey, setHelpAppKey] = useState<string | null>(null);
   const [openAdmin, setOpenAdmin] = useState(true);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("wf_sidebar_collapsed") === "1");
   const [width, setWidth] = useState(() => Number(localStorage.getItem("wf_sidebar_width")) || 260);
@@ -237,6 +240,18 @@ export function MainShell() {
                       <ListItemButton onClick={() => setOpenApps((o) => ({ ...o, [appItem.key]: !o[appItem.key] }))} sx={{ borderRadius: 1 }}>
                         <ListItemIcon sx={{ minWidth: 34, color: "primary.main" }}>{APP_ICONS[appItem.key] ?? <AccountTreeIcon />}</ListItemIcon>
                         <ListItemText primary={appItem.name} primaryTypographyProps={{ fontSize: 14, fontWeight: 600 }} />
+                        <Tooltip title={`Guida ${appItem.name}`}>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setHelpAppKey(appItem.key);
+                            }}
+                            sx={{ mr: 0.5 }}
+                          >
+                            <HelpOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                         {openApps[appItem.key] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
                       </ListItemButton>
                       <Collapse in={!!openApps[appItem.key]}>
@@ -389,6 +404,7 @@ export function MainShell() {
       </Box>
 
       <ProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} />
+      {helpAppKey && <HelpWizard open={!!helpAppKey} appKey={helpAppKey} onClose={() => setHelpAppKey(null)} />}
     </Box>
   );
 }
