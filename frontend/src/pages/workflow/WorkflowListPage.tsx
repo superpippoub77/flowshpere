@@ -20,12 +20,14 @@ import {
   TextField,
   MenuItem,
   IconButton,
+  CircularProgress,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
 import { api } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { ClearableTextField } from "../../components/ClearableTextField";
+import { useI18n } from "../../i18n";
 
 const STATUS_LABEL: Record<string, { label: string; color: any }> = {
   DRAFT: { label: "Bozza", color: "default" },
@@ -34,6 +36,7 @@ const STATUS_LABEL: Record<string, { label: string; color: any }> = {
 };
 
 export function WorkflowListPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [openCreate, setOpenCreate] = useState(false);
@@ -88,10 +91,10 @@ export function WorkflowListPage() {
           <Typography variant="overline" color="primary">
             DESIGNER
           </Typography>
-          <Typography variant="h5">I tuoi workflow</Typography>
+          <Typography variant="h5">{t("your_workflows")}</Typography>
         </Stack>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenCreate(true)}>
-          Nuovo workflow
+          {t("new_workflow")}
         </Button>
       </Stack>
 
@@ -99,12 +102,12 @@ export function WorkflowListPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Nome</TableCell>
+              <TableCell>{t("name")}</TableCell>
               <TableCell>Azienda</TableCell>
-              <TableCell>Stato</TableCell>
+              <TableCell>{t("status")}</TableCell>
               <TableCell>Versione</TableCell>
-              <TableCell>Istanze</TableCell>
-              <TableCell align="right">Azioni</TableCell>
+              <TableCell>{t("instances")}</TableCell>
+              <TableCell align="right">{t("actions")}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -141,11 +144,11 @@ export function WorkflowListPage() {
                 <TableCell className="mono">{w.instanceCount}</TableCell>
                 <TableCell align="right">
                   <Button size="small" onClick={() => navigate(`/workflow/designer/${w.id}`)}>
-                    Apri designer
+                    {t("open_designer")}
                   </Button>
                   {w.status !== "PUBLISHED" && (
                     <Button size="small" color="secondary" onClick={() => publishMutation.mutate(w.id)}>
-                      Pubblica
+                      {t("publish")}
                     </Button>
                   )}
                 </TableCell>
@@ -189,8 +192,13 @@ export function WorkflowListPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenCreate(false)}>Annulla</Button>
-          <Button variant="contained" disabled={!name || createMutation.isPending} onClick={() => createMutation.mutate()}>
+          <Button onClick={() => setOpenCreate(false)}>{t("cancel")}</Button>
+          <Button
+            variant="contained"
+            disabled={!name || createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+            startIcon={createMutation.isPending ? <CircularProgress size={14} color="inherit" /> : undefined}
+          >
             Crea e apri designer
           </Button>
         </DialogActions>
@@ -216,7 +224,7 @@ export function WorkflowListPage() {
           </TextField>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCompanyEditTarget(null)}>Annulla</Button>
+          <Button onClick={() => setCompanyEditTarget(null)}>{t("cancel")}</Button>
           <Button variant="contained" disabled={!newCompanyId || updateCompanyMutation.isPending} onClick={() => updateCompanyMutation.mutate()}>
             Salva
           </Button>

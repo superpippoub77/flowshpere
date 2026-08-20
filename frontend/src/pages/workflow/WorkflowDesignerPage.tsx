@@ -30,7 +30,13 @@ import {
   DialogActions,
   Menu,
   ListItemIcon,
+  CircularProgress,
+  Tooltip,
+  FormControlLabel,
+  Switch,
 } from "@mui/material";
+import UndoIcon from "@mui/icons-material/UndoOutlined";
+import RedoIcon from "@mui/icons-material/RedoOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddIcon from "@mui/icons-material/Add";
@@ -202,6 +208,82 @@ function DesignerInner() {
     onError: () => setStatus("error", "Errore nel salvataggio della bozza"),
   });
 
+  // --- Salvataggio automatico (con flag persistito) ---
+  const [autosave, setAutosave] = useState(() => localStorage.getItem("wf_designer_autosave") === "1");
+  useEffect(() => {
+    localStorage.setItem("wf_designer_autosave", autosave ? "1" : "0");
+  }, [autosave]);
+
+  useEffect(() => {
+    if (!autosave || !workflow) return;
+    const timer = setTimeout(() => saveMutation.mutate(), 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges, name, description, autosave]);
+
+  // --- Cronologia annulla/ripeti (almeno 100 passi indietro) ---
+  const HISTORY_LIMIT = 100;
+  const historyRef = useRef<{ nodes: any[]; edges: any[] }[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const isRestoringRef = useRef(false);
+  const historyTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    if (isRestoringRef.current) {
+      isRestoringRef.current = false;
+      return;
+    }
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+    historyTimerRef.current = setTimeout(() => {
+      setHistoryIndex((idx) => {
+        const truncated = historyRef.current.slice(0, idx + 1);
+        truncated.push({ nodes, edges });
+        const overflow = truncated.length - HISTORY_LIMIT;
+        historyRef.current = overflow > 0 ? truncated.slice(overflow) : truncated;
+        return historyRef.current.length - 1;
+      });
+    }, 400);
+    return () => clearTimeout(historyTimerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges]);
+
+  function undo() {
+    if (historyIndex <= 0) return;
+    const snap = historyRef.current[historyIndex - 1];
+    if (!snap) return;
+    isRestoringRef.current = true;
+    setNodes(snap.nodes);
+    setEdges(snap.edges);
+    setHistoryIndex(historyIndex - 1);
+  }
+
+  function redo() {
+    if (historyIndex >= historyRef.current.length - 1) return;
+    const snap = historyRef.current[historyIndex + 1];
+    if (!snap) return;
+    isRestoringRef.current = true;
+    setNodes(snap.nodes);
+    setEdges(snap.edges);
+    setHistoryIndex(historyIndex + 1);
+  }
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || (document.activeElement as HTMLElement)?.isContentEditable) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        undo();
+      } else if ((e.ctrlKey || e.metaKey) && (e.shiftKey && e.key.toLowerCase() === "z")) {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyIndex]);
+
   const publishMutation = useMutation({
     mutationFn: async () => api.post(`/workflows/${id}/publish`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workflows"] }),
@@ -291,11 +373,45 @@ function DesignerInner() {
           {workflow && (
             <Chip size="small" label={workflow.status === "PUBLISHED" ? "Pubblicato" : "Bozza"} color={workflow.status === "PUBLISHED" ? "success" : "default"} />
           )}
+
+          <Tooltip title="Annulla (Ctrl+Z)">
+            <span>
+              <IconButton size="small" onClick={undo} disabled={historyIndex <= 0}>
+                <UndoIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Ripeti (Ctrl+Shift+Z)">
+            <span>
+              <IconButton size="small" onClick={redo} disabled={historyIndex >= historyRef.current.length - 1}>
+                <RedoIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+
           <Box sx={{ flex: 1 }} />
-          <Button size="small" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+
+          <FormControlLabel
+            control={<Switch size="small" checked={autosave} onChange={(e) => setAutosave(e.target.checked)} />}
+            label={<Typography variant="caption">Salvataggio automatico</Typography>}
+            sx={{ mr: 1 }}
+          />
+          <Button
+            size="small"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            startIcon={saveMutation.isPending ? <CircularProgress size={14} /> : undefined}
+          >
             Salva bozza
           </Button>
-          <Button size="small" variant="contained" color="secondary" onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending}>
+          <Button
+            size="small"
+            variant="contained"
+            color="secondary"
+            onClick={() => publishMutation.mutate()}
+            disabled={publishMutation.isPending}
+            startIcon={publishMutation.isPending ? <CircularProgress size={14} color="inherit" /> : undefined}
+          >
             Pubblica
           </Button>
         </Stack>

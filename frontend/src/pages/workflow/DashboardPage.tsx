@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Box, Grid, Paper, Typography, Stack } from "@mui/material";
 import { api } from "../../api/client";
+import { useI18n } from "../../i18n";
 
 function KpiCard({ label, value, suffix, accent }: { label: string; value: string | number; suffix?: string; accent?: string }) {
   return (
@@ -21,6 +22,7 @@ function KpiCard({ label, value, suffix, accent }: { label: string; value: strin
 }
 
 export function DashboardPage() {
+  const { t } = useI18n();
   const { data } = useQuery({
     queryKey: ["kpi"],
     queryFn: async () => (await api.get("/dashboard/kpi")).data,
@@ -32,30 +34,30 @@ export function DashboardPage() {
         <Typography variant="overline" color="primary">
           MONITORAGGIO
         </Typography>
-        <Typography variant="h5">KPI Workflow</Typography>
+        <Typography variant="h5">{t("kpi_workflow")}</Typography>
       </Stack>
 
       <Grid container spacing={2}>
         <Grid item xs={6} md={3}>
-          <KpiCard label="Attivi" value={data?.attivi ?? "—"} accent="var(--blueprint-line)" />
+          <KpiCard label={t("active")} value={data?.attivi ?? "—"} accent="var(--blueprint-line)" />
         </Grid>
         <Grid item xs={6} md={3}>
-          <KpiCard label="Conclusi" value={data?.conclusi ?? "—"} accent="var(--verdigris)" />
+          <KpiCard label={t("completed")} value={data?.conclusi ?? "—"} accent="var(--verdigris)" />
         </Grid>
         <Grid item xs={6} md={3}>
-          <KpiCard label="Annullati" value={data?.bloccati ?? "—"} accent="var(--rust)" />
+          <KpiCard label={t("cancelled")} value={data?.bloccati ?? "—"} accent="var(--rust)" />
         </Grid>
         <Grid item xs={6} md={3}>
-          <KpiCard label="Tempo medio" value={data?.tempoMedioOre ?? "—"} suffix="h" />
+          <KpiCard label={t("avg_time")} value={data?.tempoMedioOre ?? "—"} suffix="h" />
         </Grid>
         <Grid item xs={6} md={3}>
-          <KpiCard label="Approvazioni" value={data?.percentualeApprovazioni ?? "—"} suffix="%" />
+          <KpiCard label={t("approvals")} value={data?.percentualeApprovazioni ?? "—"} suffix="%" />
         </Grid>
         <Grid item xs={6} md={3}>
-          <KpiCard label="Decisioni AI" value={data?.decisioniAi ?? "—"} accent="var(--signal-amber)" />
+          <KpiCard label={t("ai_decisions")} value={data?.decisioniAi ?? "—"} accent="var(--signal-amber)" />
         </Grid>
         <Grid item xs={6} md={3}>
-          <KpiCard label="AI automatiche" value={data?.decisioniAiAutomatiche ?? "—"} accent="var(--signal-amber)" />
+          <KpiCard label={t("ai_automatic")} value={data?.decisioniAiAutomatiche ?? "—"} accent="var(--signal-amber)" />
         </Grid>
       </Grid>
     </Box>

@@ -77,7 +77,7 @@ export function LoginPage() {
         </form>
 
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 3 }}>
-          Demo: admin@demo.it · supervisore@demo.it · operatore@demo.it — password: password123
+          Demo: superadmin@platform.it (Super Amministratore) · admin@demo.it · supervisore@demo.it · operatore@demo.it — password: password123
         </Typography>
       </Paper>
     </Box>

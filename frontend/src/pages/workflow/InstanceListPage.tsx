@@ -23,12 +23,14 @@ import {
   IconButton,
   ToggleButtonGroup,
   ToggleButton,
+  CircularProgress,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import TimelineIcon from "@mui/icons-material/TimelineOutlined";
 import dayjs from "dayjs";
 import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
+import { useI18n } from "../../i18n";
 import { StepDots, computeMainSequence, computeStepStatuses } from "./StepDots";
 import { InstanceDrawer } from "./InstanceDrawer";
 
@@ -75,6 +77,7 @@ function whoseTurnLabel(item: any, companyUsers: any[]): string {
 }
 
 export function InstanceListPage() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [workflowId, setWorkflowId] = useState("");
@@ -130,7 +133,7 @@ export function InstanceListPage() {
           <Typography variant="h5">Istanze workflow</Typography>
         </Stack>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
-          Nuova istanza
+          {t("new_instance")}
         </Button>
       </Stack>
 
@@ -141,19 +144,19 @@ export function InstanceListPage() {
         onChange={(_, value) => value && updateFilter("openClosed", value)}
         sx={{ mb: 2 }}
       >
-        <ToggleButton value="open">Aperti</ToggleButton>
-        <ToggleButton value="closed">Chiusi</ToggleButton>
-        <ToggleButton value="all">Tutti</ToggleButton>
+        <ToggleButton value="open">{t("open_f")}</ToggleButton>
+        <ToggleButton value="closed">{t("closed_f")}</ToggleButton>
+        <ToggleButton value="all">{t("all")}</ToggleButton>
       </ToggleButtonGroup>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={1.5}>
           <Grid item xs={6} sm={3} md={2}>
-            <ClearableTextField label="N. ordine" size="small" fullWidth value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} />
+            <ClearableTextField label={t("order_number")} size="small" fullWidth value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} />
           </Grid>
           <Grid item xs={6} sm={3} md={2}>
             <TextField select label="Workflow" size="small" fullWidth value={filters.workflowId} onChange={(e) => updateFilter("workflowId", e.target.value)}>
-              <MenuItem value="">Tutti</MenuItem>
+              <MenuItem value="">{t("all")}</MenuItem>
               {(workflows ?? []).map((w: any) => (
                 <MenuItem key={w.id} value={w.id}>
                   {w.name}
@@ -163,7 +166,7 @@ export function InstanceListPage() {
           </Grid>
           <Grid item xs={6} sm={3} md={2}>
             <TextField select label="Stato" size="small" fullWidth value={filters.status} onChange={(e) => updateFilter("status", e.target.value)}>
-              <MenuItem value="">Tutti</MenuItem>
+              <MenuItem value="">{t("all")}</MenuItem>
               {STATUS_OPTIONS.map((s) => (
                 <MenuItem key={s} value={s}>
                   {s}
@@ -173,7 +176,7 @@ export function InstanceListPage() {
           </Grid>
           <Grid item xs={6} sm={3} md={2}>
             <ClearableTextField
-              label="Anagrafica"
+              label={t("customer")}
               size="small"
               fullWidth
               placeholder="es. nome cliente"
@@ -183,7 +186,7 @@ export function InstanceListPage() {
           </Grid>
           <Grid item xs={6} sm={3} md={2}>
             <TextField
-              label="Dal"
+              label={t("from_date")}
               type="date"
               size="small"
               fullWidth
@@ -194,7 +197,7 @@ export function InstanceListPage() {
           </Grid>
           <Grid item xs={6} sm={3} md={2}>
             <TextField
-              label="Al"
+              label={t("to_date")}
               type="date"
               size="small"
               fullWidth
@@ -210,13 +213,13 @@ export function InstanceListPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Codice</TableCell>
+              <TableCell>{t("code")}</TableCell>
               <TableCell>Workflow</TableCell>
               <TableCell>Stato</TableCell>
-              <TableCell>Andamento</TableCell>
-              <TableCell>Chi tocca</TableCell>
-              <TableCell>Creata</TableCell>
-              <TableCell align="right">Timeline</TableCell>
+              <TableCell>{t("progress")}</TableCell>
+              <TableCell>{t("whose_turn")}</TableCell>
+              <TableCell>{t("created")}</TableCell>
+              <TableCell align="right">{t("timeline")}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -259,7 +262,7 @@ export function InstanceListPage() {
               <TableRow>
                 <TableCell colSpan={7}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                    Nessuna istanza trovata con questi filtri.
+                    {t("no_results_filters")}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -275,9 +278,9 @@ export function InstanceListPage() {
       )}
 
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Nuova istanza</DialogTitle>
+        <DialogTitle>{t("new_instance")}</DialogTitle>
         <DialogContent>
-          <TextField select label="Workflow pubblicato" fullWidth sx={{ mt: 1 }} value={workflowId} onChange={(e) => setWorkflowId(e.target.value)}>
+          <TextField select label={t("published_workflow")} fullWidth sx={{ mt: 1 }} value={workflowId} onChange={(e) => setWorkflowId(e.target.value)}>
             {publishedWorkflows.map((w: any) => (
               <MenuItem key={w.id} value={w.id}>
                 {w.name}
@@ -286,9 +289,14 @@ export function InstanceListPage() {
           </TextField>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>Annulla</Button>
-          <Button variant="contained" disabled={!workflowId || createMutation.isPending} onClick={() => createMutation.mutate()}>
-            Avvia
+          <Button onClick={() => setOpen(false)}>{t("cancel")}</Button>
+          <Button
+            variant="contained"
+            disabled={!workflowId || createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+            startIcon={createMutation.isPending ? <CircularProgress size={14} color="inherit" /> : undefined}
+          >
+            {t("start")}
           </Button>
         </DialogActions>
       </Dialog>

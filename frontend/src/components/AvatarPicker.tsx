@@ -45,9 +45,9 @@ export function AvatarPicker({
             position: "absolute",
             bottom: -4,
             right: -4,
-            background: "var(--ink-navy)",
+            background: "background.paper",
             border: "1px solid rgba(127,184,217,0.3)",
-            "&:hover": { background: "var(--ink-navy)" },
+            "&:hover": { background: "background.paper" },
           }}
         >
           <PhotoCameraIcon sx={{ fontSize: 14 }} />

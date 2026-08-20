@@ -167,7 +167,7 @@ export function MainShell() {
         sx={{
           width: sidebarWidth,
           flexShrink: 0,
-          background: "var(--ink-navy)",
+          bgcolor: "background.paper",
           borderRight: "1px solid rgba(127,184,217,0.14)",
           display: "flex",
           flexDirection: "column",

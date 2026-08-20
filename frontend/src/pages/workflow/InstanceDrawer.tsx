@@ -19,6 +19,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  CircularProgress,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CloseIcon from "@mui/icons-material/Close";
@@ -431,13 +432,23 @@ export function InstanceDrawer({
               <Button onClick={() => setDialogNode(null)}>Chiudi</Button>
 
               {readAllowed && dialogIsActive && authorized && openTask?.nodeType === "form" && (
-                <Button variant="contained" onClick={() => formMutation.mutate(openTask.id)} disabled={formMutation.isPending}>
+                <Button
+                  variant="contained"
+                  onClick={() => formMutation.mutate(openTask.id)}
+                  disabled={formMutation.isPending}
+                  startIcon={formMutation.isPending ? <CircularProgress size={14} color="inherit" /> : undefined}
+                >
                   Invia form
                 </Button>
               )}
 
               {readAllowed && dialogIsActive && authorized && openTask?.nodeType === "upload" && (
-                <Button variant="contained" onClick={() => completeMutation.mutate(openTask.id)} disabled={completeMutation.isPending}>
+                <Button
+                  variant="contained"
+                  onClick={() => completeMutation.mutate(openTask.id)}
+                  disabled={completeMutation.isPending}
+                  startIcon={completeMutation.isPending ? <CircularProgress size={14} color="inherit" /> : undefined}
+                >
                   Simula caricamento
                 </Button>
               )}
@@ -447,7 +458,7 @@ export function InstanceDrawer({
                   <Button
                     variant="outlined"
                     color="error"
-                    startIcon={<CancelIcon />}
+                    startIcon={decisionMutation.isPending ? <CircularProgress size={14} color="inherit" /> : <CancelIcon />}
                     disabled={!decisionComment || decisionMutation.isPending}
                     onClick={() => decisionMutation.mutate({ taskId: openTask.id, decision: "reject", comment: decisionComment })}
                   >
@@ -456,7 +467,7 @@ export function InstanceDrawer({
                   <Button
                     variant="contained"
                     color="success"
-                    startIcon={<CheckIcon />}
+                    startIcon={decisionMutation.isPending ? <CircularProgress size={14} color="inherit" /> : <CheckIcon />}
                     disabled={!decisionComment || decisionMutation.isPending}
                     onClick={() => decisionMutation.mutate({ taskId: openTask.id, decision: "approve", comment: decisionComment })}
                   >
