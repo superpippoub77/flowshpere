@@ -1,4 +1,5 @@
 import { useAuthStore } from "../store/authStore";
+import { useStatusStore } from "../store/statusStore";
 
 // Il backend e' ora un unico endpoint PHP (api.php) che riceve
 // { action, ...payload } e risponde in JSON. Questo modulo espone
@@ -89,6 +90,7 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/admin\/applications$/, action: "admin.applications.list" },
   { pattern: /^\/admin\/permissions$/, action: "__admin_permissions_get_or_set__" },
   { pattern: /^\/admin\/permissions\/revoke$/, action: "admin.permissions.revoke" },
+  { pattern: /^\/admin\/audit-logs$/, action: "auditLogs.list" },
 ];
 
 function resolveAction(method: "get" | "post" | "put", url: string): string {
@@ -121,6 +123,11 @@ async function call(method: "get" | "post" | "put", url: string, body?: any) {
   const action = resolveAction(method, url);
   const params = resolveParams(url);
   const { currentCompanyId } = useAuthStore.getState();
+  const isWrite = method !== "get";
+
+  if (isWrite && useStatusStore.getState().state !== "saving") {
+    useStatusStore.getState().set("saving", "Salvataggio in corso...");
+  }
 
   const payload = {
     action,
@@ -129,20 +136,28 @@ async function call(method: "get" | "post" | "put", url: string, body?: any) {
     ...(body ?? {}),
   };
 
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  let res: Response;
+  try {
+    res = await fetch(ENDPOINT, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    if (isWrite) useStatusStore.getState().set("error", "Errore di connessione");
+    throw e;
+  }
 
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    if (isWrite) useStatusStore.getState().set("error", "Errore di salvataggio");
     if (res.status === 401) useAuthStore.getState().logout();
     throw new ApiError(res.status, data);
   }
 
+  if (isWrite) useStatusStore.getState().set("saved", "Salvato");
   return { data };
 }
 

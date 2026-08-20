@@ -197,6 +197,32 @@ function run_migrations(PDO $pdo): void
             )
         ");
     }
+
+    // audit_logs.company_id era NOT NULL: lo rendiamo opzionale per poter
+    // tracciare anche azioni globali (es. creazione utenti/aziende dal Super
+    // Admin) che non appartengono a una singola azienda.
+    $auditCols = $pdo->query("PRAGMA table_info(audit_logs)")->fetchAll(PDO::FETCH_ASSOC);
+    $companyIdNotNull = false;
+    foreach ($auditCols as $c) { if ($c['name'] === 'company_id') { $companyIdNotNull = (int) $c['notnull'] === 1; break; } }
+    if ($companyIdNotNull) {
+        $pdo->exec('ALTER TABLE audit_logs RENAME TO audit_logs_old');
+        $pdo->exec("
+            CREATE TABLE audit_logs (
+                id TEXT PRIMARY KEY,
+                company_id TEXT REFERENCES companies(id),
+                user_id TEXT REFERENCES users(id),
+                instance_id TEXT REFERENCES workflow_instances(id),
+                action TEXT NOT NULL,
+                previous_value TEXT,
+                new_value TEXT,
+                ip TEXT,
+                device TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ");
+        $pdo->exec('INSERT INTO audit_logs SELECT * FROM audit_logs_old');
+        $pdo->exec('DROP TABLE audit_logs_old');
+    }
 }
 
 function new_id(string $prefix = ''): string
@@ -421,7 +447,7 @@ function create_schema(PDO $pdo): void
 
         CREATE TABLE audit_logs (
             id TEXT PRIMARY KEY,
-            company_id TEXT NOT NULL REFERENCES companies(id),
+            company_id TEXT REFERENCES companies(id),
             user_id TEXT REFERENCES users(id),
             instance_id TEXT REFERENCES workflow_instances(id),
             action TEXT NOT NULL,

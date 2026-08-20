@@ -101,6 +101,8 @@ function DesignerInner() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const nodeCounter = useRef(1);
+  const baseVersionRef = useRef<number>(0);
+  const [conflictError, setConflictError] = useState<string | null>(null);
 
   const { data: workflow } = useQuery({
     queryKey: ["workflow", id],
@@ -138,6 +140,7 @@ function DesignerInner() {
       setNodes(fixedNodes);
       setEdges(JSON.parse(latest.edgesJson));
       nodeCounter.current = rawNodes.length + 1;
+      baseVersionRef.current = latest.version;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflow]);
@@ -197,15 +200,24 @@ function DesignerInner() {
       return api.put(`/workflows/${id}/draft`, {
         name,
         description,
+        baseVersion: baseVersionRef.current,
         nodes: nodes.map((n) => ({ id: n.id, type: n.type, position: n.position, data: n.data })),
         edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle })),
       });
     },
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["workflow", id] });
+      if (res?.data?.version) baseVersionRef.current = res.data.version;
       setStatus("saved", "Bozza salvata");
     },
-    onError: () => setStatus("error", "Errore nel salvataggio della bozza"),
+    onError: (err: any) => {
+      if (err?.response?.status === 409) {
+        setConflictError(err.response.data?.error ?? "Conflitto di salvataggio.");
+        setStatus("error", "Conflitto: versione non aggiornata");
+      } else {
+        setStatus("error", "Errore nel salvataggio della bozza");
+      }
+    },
   });
 
   // --- Salvataggio automatico (con flag persistito) ---
@@ -607,6 +619,25 @@ function DesignerInner() {
           </Stack>
         )}
       </Box>
+
+      <Dialog open={!!conflictError} onClose={() => setConflictError(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Conflitto di salvataggio</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">{conflictError}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConflictError(null)}>Continua a modificare</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setConflictError(null);
+              queryClient.invalidateQueries({ queryKey: ["workflow", id] });
+            }}
+          >
+            Ricarica l'ultima versione
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={templateDialog.open} onClose={() => setTemplateDialog({ open: false, label: "" })} fullWidth maxWidth="xs">
         <DialogTitle>Salva come blocco personalizzato</DialogTitle>

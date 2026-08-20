@@ -33,6 +33,7 @@ import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettingsOutlin
 import BusinessIcon from "@mui/icons-material/BusinessOutlined";
 import PeopleIcon from "@mui/icons-material/PeopleOutlined";
 import LockPersonIcon from "@mui/icons-material/LockPersonOutlined";
+import HistoryIcon from "@mui/icons-material/HistoryOutlined";
 import LogoutIcon from "@mui/icons-material/LogoutOutlined";
 import AccountCircleIcon from "@mui/icons-material/AccountCircleOutlined";
 import LightModeIcon from "@mui/icons-material/LightModeOutlined";
@@ -75,6 +76,7 @@ const ADMIN_ITEMS = [
   { label: "Aziende", to: "/admin/companies", icon: <BusinessIcon fontSize="small" /> },
   { label: "Utenti", to: "/admin/users", icon: <PeopleIcon fontSize="small" /> },
   { label: "Permessi", to: "/admin/permissions", icon: <LockPersonIcon fontSize="small" /> },
+  { label: "Registro attività", to: "/admin/audit-logs", icon: <HistoryIcon fontSize="small" /> },
 ];
 
 const MIN_WIDTH = 200;
@@ -90,7 +92,14 @@ function NavItem({ to, icon, label }: { to: string; icon: JSX.Element; label: st
         pl: 4,
         py: 0.6,
         color: "text.secondary",
-        "&.active": { color: "text.primary", background: "rgba(127,184,217,0.12)" },
+        borderLeft: "3px solid transparent",
+        "&.active": {
+          color: "text.primary",
+          background: "rgba(127,184,217,0.14)",
+          borderLeft: "3px solid",
+          borderLeftColor: "primary.main",
+          fontWeight: 600,
+        },
         "&:hover": { background: "rgba(127,184,217,0.08)" },
       }}
     >

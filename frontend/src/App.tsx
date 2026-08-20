@@ -13,6 +13,7 @@ import { PublicOrderPage } from "./pages/public/PublicOrderPage";
 import { PublicTicketPage } from "./pages/public/PublicTicketPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminPermissionsPage } from "./pages/admin/AdminPermissionsPage";
+import { AuditLogPage } from "./pages/admin/AuditLogPage";
 import { AdminCompaniesPage } from "./pages/admin/AdminCompaniesPage";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -113,6 +114,14 @@ export function App() {
           element={
             <RequireSuperAdmin>
               <AdminPermissionsPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="admin/audit-logs"
+          element={
+            <RequireSuperAdmin>
+              <AuditLogPage />
             </RequireSuperAdmin>
           }
         />

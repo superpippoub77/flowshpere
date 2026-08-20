@@ -21,6 +21,7 @@ import {
   MenuItem,
   IconButton,
   CircularProgress,
+  TableSortLabel,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
@@ -28,6 +29,7 @@ import { api } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { ClearableTextField } from "../../components/ClearableTextField";
 import { useI18n } from "../../i18n";
+import { useSort } from "../../hooks/useSort";
 
 const STATUS_LABEL: Record<string, { label: string; color: any }> = {
   DRAFT: { label: "Bozza", color: "default" },
@@ -53,7 +55,9 @@ export function WorkflowListPage() {
   const { data: workflows } = useQuery({
     queryKey: ["workflows"],
     queryFn: async () => (await api.get("/workflows")).data,
+    refetchInterval: 15000,
   });
+  const sort = useSort(workflows ?? []);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -102,16 +106,32 @@ export function WorkflowListPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>{t("name")}</TableCell>
-              <TableCell>Azienda</TableCell>
-              <TableCell>{t("status")}</TableCell>
+              <TableCell sortDirection={sort.orderBy === "name" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "name"} direction={sort.orderDir} onClick={() => sort.requestSort("name")}>
+                  {t("name")}
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={sort.orderBy === "companyName" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "companyName"} direction={sort.orderDir} onClick={() => sort.requestSort("companyName")}>
+                  Azienda
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={sort.orderBy === "status" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "status"} direction={sort.orderDir} onClick={() => sort.requestSort("status")}>
+                  {t("status")}
+                </TableSortLabel>
+              </TableCell>
               <TableCell>Versione</TableCell>
-              <TableCell>{t("instances")}</TableCell>
+              <TableCell sortDirection={sort.orderBy === "instanceCount" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "instanceCount"} direction={sort.orderDir} onClick={() => sort.requestSort("instanceCount")}>
+                  {t("instances")}
+                </TableSortLabel>
+              </TableCell>
               <TableCell align="right">{t("actions")}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {(workflows ?? []).map((w: any) => (
+            {sort.sorted.map((w: any) => (
               <TableRow key={w.id} hover>
                 <TableCell>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>

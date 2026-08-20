@@ -24,12 +24,14 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   CircularProgress,
+  TableSortLabel,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import TimelineIcon from "@mui/icons-material/TimelineOutlined";
 import dayjs from "dayjs";
 import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
+import { useSort } from "../../hooks/useSort";
 import { useI18n } from "../../i18n";
 import { StepDots, computeMainSequence, computeStepStatuses } from "./StepDots";
 import { InstanceDrawer } from "./InstanceDrawer";
@@ -96,6 +98,7 @@ export function InstanceListPage() {
   const { data } = useQuery({
     queryKey: ["instances", page, filters],
     queryFn: async () => (await api.get("/instances", { page, ...filters })).data,
+    refetchInterval: 8000,
   });
 
   const { data: workflows } = useQuery({
@@ -110,6 +113,7 @@ export function InstanceListPage() {
 
   const publishedWorkflows = (workflows ?? []).filter((w: any) => w.status === "PUBLISHED");
   const items = data?.items ?? [];
+  const sort = useSort(items);
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
   const createMutation = useMutation({
@@ -213,17 +217,29 @@ export function InstanceListPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>{t("code")}</TableCell>
+              <TableCell sortDirection={sort.orderBy === "code" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "code"} direction={sort.orderDir} onClick={() => sort.requestSort("code")}>
+                  {t("code")}
+                </TableSortLabel>
+              </TableCell>
               <TableCell>Workflow</TableCell>
-              <TableCell>Stato</TableCell>
+              <TableCell sortDirection={sort.orderBy === "status" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "status"} direction={sort.orderDir} onClick={() => sort.requestSort("status")}>
+                  Stato
+                </TableSortLabel>
+              </TableCell>
               <TableCell>{t("progress")}</TableCell>
               <TableCell>{t("whose_turn")}</TableCell>
-              <TableCell>{t("created")}</TableCell>
+              <TableCell sortDirection={sort.orderBy === "createdAt" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "createdAt"} direction={sort.orderDir} onClick={() => sort.requestSort("createdAt")}>
+                  {t("created")}
+                </TableSortLabel>
+              </TableCell>
               <TableCell align="right">{t("timeline")}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {items.map((inst: any) => (
+            {sort.sorted.map((inst: any) => (
               <TableRow key={inst.id} hover>
                 <TableCell className="mono">{inst.code}</TableCell>
                 <TableCell>{inst.workflow?.name}</TableCell>

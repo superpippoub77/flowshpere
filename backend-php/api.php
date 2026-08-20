@@ -228,7 +228,16 @@ switch ($action) {
 
         $vStmt = db()->prepare('SELECT MAX(version) as v FROM workflow_versions WHERE workflow_id = ?');
         $vStmt->execute([$w['id']]);
-        $nextVersion = ((int) $vStmt->fetch(PDO::FETCH_ASSOC)['v']) + 1;
+        $currentMax = (int) $vStmt->fetch(PDO::FETCH_ASSOC)['v'];
+
+        // Controllo di concorrenza ottimistica: se il client dice da quale
+        // versione e' partito e nel frattempo qualcun altro ne ha gia' salvata
+        // una piu' recente, blocchiamo invece di sovrascrivere in silenzio.
+        if (isset($input['baseVersion']) && (int) $input['baseVersion'] < $currentMax) {
+            error_response('Un\'altra persona ha salvato una versione piu\' recente di questo workflow (v' . $currentMax . ') mentre lo stavi modificando. Ricarica la pagina per vedere le sue modifiche prima di continuare.', 409);
+        }
+
+        $nextVersion = $currentMax + 1;
 
         db()->prepare('INSERT INTO workflow_versions (id, workflow_id, version, nodes_json, edges_json, forms_json) VALUES (?, ?, ?, ?, ?, ?)')
             ->execute([new_id('wfv'), $w['id'], $nextVersion, json_encode($input['nodes'] ?? []), json_encode($input['edges'] ?? []), json_encode($input['forms'] ?? (object)[])]);
@@ -236,7 +245,7 @@ switch ($action) {
             ->execute([$input['name'], $input['description'] ?? null, $w['id']]);
 
         log_audit($ctx['companyId'], $user['id'], null, 'Bozza salvata per "' . $input['name'] . '" (v' . $nextVersion . ')');
-        json_response(['ok' => true]);
+        json_response(['ok' => true, 'version' => $nextVersion]);
         break;
 
     case 'workflows.publish':
@@ -614,6 +623,7 @@ switch ($action) {
         require_role($ctx['roleKey'], ['ADMIN']);
         require_fields($input, ['id']);
         db()->prepare('UPDATE api_tokens SET revoked = 1 WHERE id = ? AND company_id = ?')->execute([$input['id'], $ctx['companyId']]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Token API disattivato: ' . $input['id']);
         json_response(['ok' => true]);
         break;
 
@@ -622,6 +632,7 @@ switch ($action) {
         require_role($ctx['roleKey'], ['ADMIN']);
         require_fields($input, ['id']);
         db()->prepare('DELETE FROM api_tokens WHERE id = ? AND company_id = ?')->execute([$input['id'], $ctx['companyId']]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Token API eliminato: ' . $input['id']);
         json_response(['ok' => true]);
         break;
 
@@ -646,6 +657,7 @@ switch ($action) {
         $id = new_id('tcat');
         db()->prepare('INSERT INTO ticket_categories (id, company_id, name, description, default_assignee_id) VALUES (?, ?, ?, ?, ?)')
             ->execute([$id, $ctx['companyId'], $input['name'], $input['description'] ?? null, $input['defaultAssigneeId'] ?? null]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Ramo ticket creato: "' . $input['name'] . '"');
         json_response(['id' => $id], 201);
         break;
 
@@ -655,6 +667,7 @@ switch ($action) {
         require_fields($input, ['id', 'name']);
         db()->prepare('UPDATE ticket_categories SET name = ?, description = ?, default_assignee_id = ? WHERE id = ? AND company_id = ?')
             ->execute([$input['name'], $input['description'] ?? null, $input['defaultAssigneeId'] ?? null, $input['id'], $ctx['companyId']]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Ramo ticket modificato: "' . $input['name'] . '"');
         json_response(['ok' => true]);
         break;
 
@@ -668,6 +681,7 @@ switch ($action) {
             error_response('Impossibile eliminare: ci sono ticket collegati a questo ramo.', 409);
         }
         db()->prepare('DELETE FROM ticket_categories WHERE id = ? AND company_id = ?')->execute([$input['id'], $ctx['companyId']]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Ramo ticket eliminato: ' . $input['id']);
         json_response(['ok' => true]);
         break;
 
@@ -757,6 +771,7 @@ switch ($action) {
         $status = in_array($input['status'], ['APERTO', 'IN_LAVORAZIONE', 'RISOLTO', 'CHIUSO'], true) ? $input['status'] : 'APERTO';
         db()->prepare('UPDATE tickets SET status = ?, updated_at = datetime("now") WHERE id = ? AND company_id = ?')
             ->execute([$status, $input['id'], $ctx['companyId']]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Ticket ' . $input['id'] . ' — stato cambiato: ' . $status);
         json_response(['ok' => true]);
         break;
 
@@ -765,6 +780,7 @@ switch ($action) {
         require_fields($input, ['id']);
         db()->prepare('UPDATE tickets SET assigned_to_id = ?, updated_at = datetime("now") WHERE id = ? AND company_id = ?')
             ->execute([$input['assignedToId'] ?? null, $input['id'], $ctx['companyId']]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Ticket ' . $input['id'] . ' — riassegnato a: ' . ($input['assignedToId'] ?? 'nessuno'));
         json_response(['ok' => true]);
         break;
 
@@ -774,6 +790,7 @@ switch ($action) {
         db()->prepare('INSERT INTO ticket_comments (id, ticket_id, author_id, body) VALUES (?, ?, ?, ?)')
             ->execute([new_id('tcm'), $input['id'], $user['id'], $input['body']]);
         db()->prepare('UPDATE tickets SET updated_at = datetime("now") WHERE id = ?')->execute([$input['id']]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Commento aggiunto sul ticket ' . $input['id']);
         json_response(['ok' => true], 201);
         break;
 
@@ -797,6 +814,7 @@ switch ($action) {
 
         $id = new_id('cust');
         db()->prepare('INSERT INTO customers (id, company_id, name) VALUES (?, ?, ?)')->execute([$id, $ctx['companyId'], $name]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Cliente aggiunto in anagrafica: "' . $name . '"');
         json_response(['id' => $id, 'name' => $name], 201);
         break;
 
@@ -846,6 +864,7 @@ switch ($action) {
             $userType === 'SUPERADMIN' ? 1 : 0, $userType,
             $input['phone'] ?? null, $input['jobTitle'] ?? null, !empty($input['notes']) ? encrypt_data($input['notes']) : null, $avatarName,
         ]);
+        log_audit(null, $user['id'], null, 'Utente creato: "' . $input['fullName'] . '" (' . $input['email'] . ')');
         json_response(['id' => $newId], 201);
         break;
 
@@ -872,6 +891,7 @@ switch ($action) {
         if (empty($fields)) json_response(['ok' => true]);
         $params[] = $input['id'];
         db()->prepare('UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+        log_audit(null, $user['id'], null, 'Utente modificato: ' . $input['id']);
         json_response(['ok' => true]);
         break;
 
@@ -888,11 +908,16 @@ switch ($action) {
             }
         }
 
+        $delStmt = db()->prepare('SELECT email, full_name FROM users WHERE id = ?');
+        $delStmt->execute([$input['id']]);
+        $deletedUser = $delStmt->fetch(PDO::FETCH_ASSOC);
+
         db()->prepare('UPDATE workflow_tasks SET assigned_to_id = NULL WHERE assigned_to_id = ?')->execute([$input['id']]);
         db()->prepare('UPDATE audit_logs SET user_id = NULL WHERE user_id = ?')->execute([$input['id']]);
         db()->prepare('DELETE FROM user_company_applications WHERE user_company_id IN (SELECT id FROM user_companies WHERE user_id = ?)')->execute([$input['id']]);
         db()->prepare('DELETE FROM user_companies WHERE user_id = ?')->execute([$input['id']]);
         db()->prepare('DELETE FROM users WHERE id = ?')->execute([$input['id']]);
+        log_audit(null, $user['id'], null, 'Utente eliminato: "' . ($deletedUser['full_name'] ?? $input['id']) . '" (' . ($deletedUser['email'] ?? '') . ')');
         json_response(['ok' => true]);
         break;
 
@@ -916,6 +941,7 @@ switch ($action) {
         ensure_company_role(db(), $id, 'ADMIN');
         ensure_company_role(db(), $id, 'SUPERVISOR');
         ensure_company_role(db(), $id, 'OPERATOR');
+        log_audit($id, $user['id'], null, 'Azienda creata: "' . $input['name'] . '"');
         json_response(['id' => $id], 201);
         break;
 
@@ -923,6 +949,7 @@ switch ($action) {
         require_super_admin($user);
         require_fields($input, ['id', 'name']);
         db()->prepare('UPDATE companies SET name = ? WHERE id = ?')->execute([$input['name'], $input['id']]);
+        log_audit($input['id'], $user['id'], null, 'Azienda rinominata: "' . $input['name'] . '"');
         json_response(['ok' => true]);
         break;
 
@@ -934,10 +961,16 @@ switch ($action) {
         if ((int) $stmt->fetch(PDO::FETCH_ASSOC)['c'] > 0) {
             error_response('Impossibile eliminare: l\'azienda ha workflow collegati.', 409);
         }
+        $nameStmt = db()->prepare('SELECT name FROM companies WHERE id = ?');
+        $nameStmt->execute([$input['id']]);
+        $deletedCompany = $nameStmt->fetch(PDO::FETCH_ASSOC);
+
+        db()->prepare('UPDATE audit_logs SET company_id = NULL WHERE company_id = ?')->execute([$input['id']]);
         db()->prepare('DELETE FROM user_company_applications WHERE user_company_id IN (SELECT id FROM user_companies WHERE company_id = ?)')->execute([$input['id']]);
         db()->prepare('DELETE FROM user_companies WHERE company_id = ?')->execute([$input['id']]);
         db()->prepare('DELETE FROM roles WHERE company_id = ?')->execute([$input['id']]);
         db()->prepare('DELETE FROM companies WHERE id = ?')->execute([$input['id']]);
+        log_audit(null, $user['id'], null, 'Azienda eliminata: "' . ($deletedCompany['name'] ?? $input['id']) . '"');
         json_response(['ok' => true]);
         break;
 
@@ -998,6 +1031,7 @@ switch ($action) {
             db()->prepare('INSERT INTO user_company_applications (id, user_company_id, application_id, role_id) VALUES (?, ?, ?, ?)')
                 ->execute([new_id('uca'), $ucId, $app['id'], $roleId]);
         }
+        log_audit($input['companyId'], $user['id'], null, 'Permesso impostato: utente ' . $input['userId'] . ' — ' . $input['applicationKey'] . ' = ' . $roleKey);
         json_response(['ok' => true]);
         break;
 
@@ -1015,10 +1049,46 @@ switch ($action) {
             db()->prepare('DELETE FROM user_company_applications WHERE user_company_id = ? AND application_id = ?')
                 ->execute([$uc['id'], $app['id']]);
         }
+        log_audit($input['companyId'], $user['id'], null, 'Permesso revocato: utente ' . $input['userId'] . ' — ' . $input['applicationKey']);
         json_response(['ok' => true]);
         break;
 
     // ---------------- DASHBOARD ----------------
+
+    case 'auditLogs.list':
+        require_super_admin($user);
+        $pageSize = 25;
+        $page = max(1, (int) ($input['page'] ?? 1));
+        $offset = ($page - 1) * $pageSize;
+
+        $where = [];
+        $params = [];
+        if (!empty($input['companyId'])) { $where[] = 'l.company_id = ?'; $params[] = $input['companyId']; }
+        if (!empty($input['userId'])) { $where[] = 'l.user_id = ?'; $params[] = $input['userId']; }
+        if (!empty($input['query'])) { $where[] = 'l.action LIKE ?'; $params[] = '%' . $input['query'] . '%'; }
+        if (!empty($input['dateFrom'])) { $where[] = 'date(l.created_at) >= date(?)'; $params[] = $input['dateFrom']; }
+        if (!empty($input['dateTo'])) { $where[] = 'date(l.created_at) <= date(?)'; $params[] = $input['dateTo']; }
+        $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        $countStmt = db()->prepare("SELECT COUNT(*) as c FROM audit_logs l $whereSql");
+        $countStmt->execute($params);
+        $total = (int) $countStmt->fetch(PDO::FETCH_ASSOC)['c'];
+
+        $stmt = db()->prepare("
+            SELECT l.*, c.name as company_name, u.full_name as user_name FROM audit_logs l
+            LEFT JOIN companies c ON c.id = l.company_id
+            LEFT JOIN users u ON u.id = l.user_id
+            $whereSql ORDER BY l.created_at DESC LIMIT $pageSize OFFSET $offset
+        ");
+        $stmt->execute($params);
+        json_response([
+            'items' => array_map(fn($l) => [
+                'id' => $l['id'], 'action' => $l['action'], 'companyName' => $l['company_name'], 'userName' => $l['user_name'],
+                'ip' => $l['ip'], 'createdAt' => $l['created_at'], 'instanceId' => $l['instance_id'],
+            ], $stmt->fetchAll(PDO::FETCH_ASSOC)),
+            'total' => $total, 'page' => $page, 'pageSize' => $pageSize,
+        ]);
+        break;
 
     case 'dashboard.kpi':
         $ctx = require_company($user, $input['companyId'] ?? null);

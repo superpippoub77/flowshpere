@@ -35,6 +35,7 @@ export function TicketDrawer({ ticketId, onClose }: { ticketId: string | null; o
     queryKey: ["ticket", ticketId],
     queryFn: async () => (await api.get(`/tickets/${ticketId}`)).data,
     enabled: !!ticketId,
+    refetchInterval: 4000,
   });
 
   const { data: companyUsers } = useQuery({

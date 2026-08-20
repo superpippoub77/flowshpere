@@ -21,11 +21,13 @@ import {
   Pagination,
   Grid,
   CircularProgress,
+  TableSortLabel,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import dayjs from "dayjs";
 import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
+import { useSort } from "../../hooks/useSort";
 import { TicketDrawer } from "./TicketDrawer";
 
 const STATUS_LABEL: Record<string, { label: string; color: any }> = {
@@ -61,10 +63,12 @@ export function TicketListPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["tickets", filters, page],
     queryFn: async () => (await api.get("/tickets", { ...filters, page })).data,
+    refetchInterval: 8000,
   });
 
   const items = data?.items ?? [];
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const sort = useSort(items);
 
   const createMutation = useMutation({
     mutationFn: async () => (await api.post("/tickets", { subject, description, categoryId: categoryId || undefined, priority })).data,
@@ -140,17 +144,45 @@ export function TicketListPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>N. ticket</TableCell>
-              <TableCell>Oggetto</TableCell>
-              <TableCell>Ramo</TableCell>
-              <TableCell>Priorità</TableCell>
-              <TableCell>Stato</TableCell>
-              <TableCell>Assegnato a</TableCell>
-              <TableCell>Aggiornato</TableCell>
+              <TableCell sortDirection={sort.orderBy === "code" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "code"} direction={sort.orderDir} onClick={() => sort.requestSort("code")}>
+                  N. ticket
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={sort.orderBy === "subject" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "subject"} direction={sort.orderDir} onClick={() => sort.requestSort("subject")}>
+                  Oggetto
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={sort.orderBy === "categoryName" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "categoryName"} direction={sort.orderDir} onClick={() => sort.requestSort("categoryName")}>
+                  Ramo
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={sort.orderBy === "priority" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "priority"} direction={sort.orderDir} onClick={() => sort.requestSort("priority")}>
+                  Priorità
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={sort.orderBy === "status" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "status"} direction={sort.orderDir} onClick={() => sort.requestSort("status")}>
+                  Stato
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={sort.orderBy === "assignedToName" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "assignedToName"} direction={sort.orderDir} onClick={() => sort.requestSort("assignedToName")}>
+                  Assegnato a
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={sort.orderBy === "updatedAt" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "updatedAt"} direction={sort.orderDir} onClick={() => sort.requestSort("updatedAt")}>
+                  Aggiornato
+                </TableSortLabel>
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {items.map((t: any) => (
+            {sort.sorted.map((t: any) => (
               <TableRow key={t.id} hover onClick={() => setDrawerId(t.id)} sx={{ cursor: "pointer" }}>
                 <TableCell className="mono">{t.code}</TableCell>
                 <TableCell>{t.subject}</TableCell>

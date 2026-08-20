@@ -20,6 +20,7 @@ import {
   MenuItem,
   IconButton,
   Avatar,
+  TableSortLabel,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
@@ -27,6 +28,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { api, getAvatarUrl } from "../../api/client";
 import { AvatarPicker } from "../../components/AvatarPicker";
 import { PasswordField } from "../../components/PasswordField";
+import { useSort } from "../../hooks/useSort";
 import { ClearableTextField } from "../../components/ClearableTextField";
 
 const TYPE_LABEL: Record<string, { label: string; color: any }> = {
@@ -50,6 +52,7 @@ export function AdminUsersPage() {
     queryKey: ["admin-users"],
     queryFn: async () => (await api.get("/admin/users")).data,
   });
+  const sort = useSort(users ?? []);
 
   function closeDialog() {
     queryClient.invalidateQueries({ queryKey: ["admin-users"] });
@@ -114,15 +117,27 @@ export function AdminUsersPage() {
           <TableHead>
             <TableRow>
               <TableCell></TableCell>
-              <TableCell>Nome</TableCell>
-              <TableCell>Email</TableCell>
+              <TableCell sortDirection={sort.orderBy === "fullName" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "fullName"} direction={sort.orderDir} onClick={() => sort.requestSort("fullName")}>
+                  Nome
+                </TableSortLabel>
+              </TableCell>
+              <TableCell sortDirection={sort.orderBy === "email" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "email"} direction={sort.orderDir} onClick={() => sort.requestSort("email")}>
+                  Email
+                </TableSortLabel>
+              </TableCell>
               <TableCell>Telefono / Ruolo</TableCell>
-              <TableCell>Tipo</TableCell>
+              <TableCell sortDirection={sort.orderBy === "userType" ? sort.orderDir : false}>
+                <TableSortLabel active={sort.orderBy === "userType"} direction={sort.orderDir} onClick={() => sort.requestSort("userType")}>
+                  Tipo
+                </TableSortLabel>
+              </TableCell>
               <TableCell align="right">Azioni</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {(users ?? []).map((u: any) => (
+            {sort.sorted.map((u: any) => (
               <TableRow key={u.id} hover>
                 <TableCell width={48}>
                   <Avatar src={u.hasAvatar ? getAvatarUrl(u.id) : undefined} sx={{ width: 32, height: 32, fontSize: 14 }}>
