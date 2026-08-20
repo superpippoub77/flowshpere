@@ -23,6 +23,15 @@ function RequireSuperAdmin({ children }: { children: JSX.Element }) {
   return children;
 }
 
+function RequireWorkflowAdmin({ children }: { children: JSX.Element }) {
+  const user = useAuthStore((s) => s.user);
+  const companies = useAuthStore((s) => s.companies);
+  const currentCompanyId = useAuthStore((s) => s.currentCompanyId);
+  const roleKey = companies.find((c) => c.id === currentCompanyId)?.roleKey;
+  if (!user?.isSuperAdmin && roleKey !== "ADMIN") return <Navigate to="/workflow/dashboard" replace />;
+  return children;
+}
+
 export function App() {
   return (
     <Routes>
@@ -39,10 +48,31 @@ export function App() {
         <Route index element={<Navigate to="workflow/dashboard" replace />} />
         <Route path="workflow" element={<Navigate to="dashboard" replace />} />
         <Route path="workflow/dashboard" element={<DashboardPage />} />
-        <Route path="workflow/designer" element={<WorkflowListPage />} />
-        <Route path="workflow/designer/:id" element={<WorkflowDesignerPage />} />
+        <Route
+          path="workflow/designer"
+          element={
+            <RequireWorkflowAdmin>
+              <WorkflowListPage />
+            </RequireWorkflowAdmin>
+          }
+        />
+        <Route
+          path="workflow/designer/:id"
+          element={
+            <RequireWorkflowAdmin>
+              <WorkflowDesignerPage />
+            </RequireWorkflowAdmin>
+          }
+        />
         <Route path="workflow/instances" element={<InstanceListPage />} />
-        <Route path="workflow/api-tokens" element={<ApiTokensPage />} />
+        <Route
+          path="workflow/api-tokens"
+          element={
+            <RequireWorkflowAdmin>
+              <ApiTokensPage />
+            </RequireWorkflowAdmin>
+          }
+        />
 
         <Route
           path="admin/companies"

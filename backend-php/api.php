@@ -176,6 +176,7 @@ switch ($action) {
     case 'workflows.get':
         require_fields($input, ['id']);
         $ctx = require_company($user, $input['companyId'] ?? null);
+        require_role($ctx['roleKey'], ['ADMIN']);
         $stmt = db()->prepare('SELECT * FROM workflows WHERE id = ? AND company_id = ?');
         $stmt->execute([$input['id'], $ctx['companyId']]);
         $w = $stmt->fetch(PDO::FETCH_ASSOC);

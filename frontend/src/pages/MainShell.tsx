@@ -46,12 +46,12 @@ import { GlobalSearch } from "../components/GlobalSearch";
 import { ProfileDialog } from "../components/ProfileDialog";
 import { StatusBar } from "../components/StatusBar";
 
-const APP_OPERATIONS: Record<string, { label: string; to: string; icon: JSX.Element }[]> = {
+const APP_OPERATIONS: Record<string, { label: string; to: string; icon: JSX.Element; adminOnly?: boolean }[]> = {
   workflow: [
     { label: "Dashboard", to: "/workflow/dashboard", icon: <DashboardIcon fontSize="small" /> },
-    { label: "Designer workflow", to: "/workflow/designer", icon: <AccountTreeIcon fontSize="small" /> },
+    { label: "Designer workflow", to: "/workflow/designer", icon: <AccountTreeIcon fontSize="small" />, adminOnly: true },
     { label: "Istanze", to: "/workflow/instances", icon: <ListAltIcon fontSize="small" /> },
-    { label: "Token API", to: "/workflow/api-tokens", icon: <VpnKeyIcon fontSize="small" /> },
+    { label: "Token API", to: "/workflow/api-tokens", icon: <VpnKeyIcon fontSize="small" />, adminOnly: true },
   ],
   timesheet: [{ label: "Presto disponibile", to: "#", icon: <ScheduleIcon fontSize="small" /> }],
   ticket: [{ label: "Presto disponibile", to: "#", icon: <ConfirmationNumberIcon fontSize="small" /> }],
@@ -241,9 +241,11 @@ export function MainShell() {
                       </ListItemButton>
                       <Collapse in={!!openApps[appItem.key]}>
                         <List disablePadding dense>
-                          {(APP_OPERATIONS[appItem.key] ?? []).map((op) => (
-                            <NavItem key={op.to} to={op.to} icon={op.icon} label={op.label} />
-                          ))}
+                          {(APP_OPERATIONS[appItem.key] ?? [])
+                            .filter((op) => !op.adminOnly || user?.isSuperAdmin || company?.roleKey === "ADMIN")
+                            .map((op) => (
+                              <NavItem key={op.to} to={op.to} icon={op.icon} label={op.label} />
+                            ))}
                         </List>
                       </Collapse>
                     </Box>
