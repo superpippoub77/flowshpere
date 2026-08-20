@@ -20,7 +20,7 @@ function upsert_application(PDO $pdo, string $key, string $name, string $categor
 
 $workflowAppId = upsert_application($pdo, 'workflow', 'Workflow Management', 'Gestionale', true);
 upsert_application($pdo, 'timesheet', 'Timesheet Dipendenti', 'Risorse Umane', true);
-upsert_application($pdo, 'ticket', 'Gestione Ticket', 'Gestionale', true);
+$ticketAppId = upsert_application($pdo, 'ticket', 'Gestione Ticket', 'Gestionale', true);
 upsert_application($pdo, 'crm', 'CRM', 'Gestionale', true);
 
 // ---- Azienda demo ----
@@ -84,6 +84,13 @@ foreach ($usersDef as [$email, $fullName, $roleKey]) {
     if (!$stmt->fetch()) {
         $pdo->prepare('INSERT INTO user_company_applications (id, user_company_id, application_id, role_id) VALUES (?, ?, ?, ?)')
             ->execute([new_id('uca'), $ucId, $workflowAppId, $roleIds[$roleKey]]);
+    }
+
+    $stmt = $pdo->prepare('SELECT id FROM user_company_applications WHERE user_company_id = ? AND application_id = ?');
+    $stmt->execute([$ucId, $ticketAppId]);
+    if (!$stmt->fetch()) {
+        $pdo->prepare('INSERT INTO user_company_applications (id, user_company_id, application_id, role_id) VALUES (?, ?, ?, ?)')
+            ->execute([new_id('uca'), $ucId, $ticketAppId, $roleIds[$roleKey]]);
     }
 }
 

@@ -7,6 +7,10 @@ import { WorkflowListPage } from "./pages/workflow/WorkflowListPage";
 import { WorkflowDesignerPage } from "./pages/workflow/WorkflowDesignerPage";
 import { InstanceListPage } from "./pages/workflow/InstanceListPage";
 import { ApiTokensPage } from "./pages/workflow/ApiTokensPage";
+import { TicketListPage } from "./pages/ticket/TicketListPage";
+import { TicketCategoriesPage } from "./pages/ticket/TicketCategoriesPage";
+import { PublicOrderPage } from "./pages/public/PublicOrderPage";
+import { PublicTicketPage } from "./pages/public/PublicTicketPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminPermissionsPage } from "./pages/admin/AdminPermissionsPage";
 import { AdminCompaniesPage } from "./pages/admin/AdminCompaniesPage";
@@ -23,12 +27,14 @@ function RequireSuperAdmin({ children }: { children: JSX.Element }) {
   return children;
 }
 
-function RequireWorkflowAdmin({ children }: { children: JSX.Element }) {
+function RequireAppAdmin({ appKey, children }: { appKey: string | string[]; children: JSX.Element }) {
   const user = useAuthStore((s) => s.user);
   const companies = useAuthStore((s) => s.companies);
   const currentCompanyId = useAuthStore((s) => s.currentCompanyId);
-  const roleKey = companies.find((c) => c.id === currentCompanyId)?.roleKey;
-  if (!user?.isSuperAdmin && roleKey !== "ADMIN") return <Navigate to="/workflow/dashboard" replace />;
+  const company = companies.find((c) => c.id === currentCompanyId);
+  const keys = Array.isArray(appKey) ? appKey : [appKey];
+  const isAdmin = user?.isSuperAdmin || keys.some((k) => (company?.rolesByApp?.[k] ?? company?.roleKey) === "ADMIN");
+  if (!isAdmin) return <Navigate to="/workflow/dashboard" replace />;
   return children;
 }
 
@@ -36,6 +42,8 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/public/order" element={<PublicOrderPage />} />
+      <Route path="/public/ticket" element={<PublicTicketPage />} />
       <Route path="/apps" element={<Navigate to="/workflow/dashboard" replace />} />
       <Route
         path="/"
@@ -51,26 +59,36 @@ export function App() {
         <Route
           path="workflow/designer"
           element={
-            <RequireWorkflowAdmin>
+            <RequireAppAdmin appKey="workflow">
               <WorkflowListPage />
-            </RequireWorkflowAdmin>
+            </RequireAppAdmin>
           }
         />
         <Route
           path="workflow/designer/:id"
           element={
-            <RequireWorkflowAdmin>
+            <RequireAppAdmin appKey="workflow">
               <WorkflowDesignerPage />
-            </RequireWorkflowAdmin>
+            </RequireAppAdmin>
           }
         />
         <Route path="workflow/instances" element={<InstanceListPage />} />
         <Route
           path="workflow/api-tokens"
           element={
-            <RequireWorkflowAdmin>
+            <RequireAppAdmin appKey={["workflow", "ticket"]}>
               <ApiTokensPage />
-            </RequireWorkflowAdmin>
+            </RequireAppAdmin>
+          }
+        />
+
+        <Route path="ticket/tickets" element={<TicketListPage />} />
+        <Route
+          path="ticket/categories"
+          element={
+            <RequireAppAdmin appKey="ticket">
+              <TicketCategoriesPage />
+            </RequireAppAdmin>
           }
         />
 

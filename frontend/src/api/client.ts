@@ -71,6 +71,15 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/customers\/search$/, action: "customers.search" },
   { pattern: /^\/customers$/, action: "customers.create" },
 
+  { pattern: /^\/tickets$/, action: "__tickets_list_or_create__" },
+  { pattern: /^\/tickets\/([^/]+)$/, action: "tickets.get", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/tickets\/([^/]+)\/status$/, action: "tickets.updateStatus", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/tickets\/([^/]+)\/assign$/, action: "tickets.assign", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/tickets\/([^/]+)\/comments$/, action: "tickets.comment", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/ticket-categories$/, action: "__ticket_categories_list_or_create__" },
+  { pattern: /^\/ticket-categories\/([^/]+)$/, action: "ticketCategories.update", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/ticket-categories\/([^/]+)\/delete$/, action: "ticketCategories.delete", extract: (m) => ({ id: m[1] }) },
+
   { pattern: /^\/admin\/users$/, action: "__admin_users_list_or_create__" },
   { pattern: /^\/admin\/users\/([^/]+)\/delete$/, action: "admin.users.delete", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/admin\/users\/([^/]+)$/, action: "admin.users.update", extract: (m) => ({ id: m[1] }) },
@@ -93,6 +102,8 @@ function resolveAction(method: "get" | "post" | "put", url: string): string {
     if (m.action === "__admin_companies_list_or_create__") return method === "get" ? "admin.companies.list" : "admin.companies.create";
     if (m.action === "__node_templates_list_or_create__") return method === "get" ? "nodeTemplates.list" : "nodeTemplates.create";
     if (m.action === "__api_tokens_list_or_create__") return method === "get" ? "apiTokens.list" : "apiTokens.create";
+    if (m.action === "__tickets_list_or_create__") return method === "get" ? "tickets.list" : "tickets.create";
+    if (m.action === "__ticket_categories_list_or_create__") return method === "get" ? "ticketCategories.list" : "ticketCategories.create";
     return m.action;
   }
   throw new Error(`Nessuna azione API mappata per ${method.toUpperCase()} ${url}`);

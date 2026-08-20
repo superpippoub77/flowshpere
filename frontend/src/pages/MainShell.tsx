@@ -56,7 +56,11 @@ const APP_OPERATIONS: Record<string, { label: string; to: string; icon: JSX.Elem
     { label: "Token API", to: "/workflow/api-tokens", icon: <VpnKeyIcon fontSize="small" />, adminOnly: true },
   ],
   timesheet: [{ label: "Presto disponibile", to: "#", icon: <ScheduleIcon fontSize="small" /> }],
-  ticket: [{ label: "Presto disponibile", to: "#", icon: <ConfirmationNumberIcon fontSize="small" /> }],
+  ticket: [
+    { label: "Ticket", to: "/ticket/tickets", icon: <ConfirmationNumberIcon fontSize="small" /> },
+    { label: "Rami di gestione", to: "/ticket/categories", icon: <ListAltIcon fontSize="small" />, adminOnly: true },
+    { label: "Token API", to: "/workflow/api-tokens", icon: <VpnKeyIcon fontSize="small" />, adminOnly: true },
+  ],
   crm: [{ label: "Presto disponibile", to: "#", icon: <GroupsIcon fontSize="small" /> }],
 };
 
@@ -257,7 +261,7 @@ export function MainShell() {
                       <Collapse in={!!openApps[appItem.key]}>
                         <List disablePadding dense>
                           {(APP_OPERATIONS[appItem.key] ?? [])
-                            .filter((op) => !op.adminOnly || user?.isSuperAdmin || company?.roleKey === "ADMIN")
+                            .filter((op) => !op.adminOnly || user?.isSuperAdmin || (company?.rolesByApp?.[appItem.key] ?? company?.roleKey) === "ADMIN")
                             .map((op) => (
                               <NavItem key={op.to} to={op.to} icon={op.icon} label={op.label} />
                             ))}

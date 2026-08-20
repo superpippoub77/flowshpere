@@ -45,17 +45,41 @@ $workflowId = $apiToken['workflow_id'];
 if (!$workflowId) {
     if (!empty($input['workflowId'])) {
         $workflowId = $input['workflowId'];
+    } elseif (!empty($_GET['workflowId'])) {
+        $workflowId = $_GET['workflowId'];
     } elseif (!empty($input['workflowName'])) {
         $wStmt = db()->prepare('SELECT id FROM workflows WHERE company_id = ? AND name = ? AND status = "PUBLISHED"');
         $wStmt->execute([$companyId, $input['workflowName']]);
         $w = $wStmt->fetch(PDO::FETCH_ASSOC);
         if (!$w) error_response('Workflow non trovato: "' . $input['workflowName'] . '"', 404);
         $workflowId = $w['id'];
-    } else {
+    } elseif ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         error_response('Specifica workflowId o workflowName (questo token non e\' vincolato a un workflow specifico)', 400);
     }
 } elseif (!empty($input['workflowId']) && $input['workflowId'] !== $workflowId) {
     error_response('Questo token puo\' essere usato solo per un workflow specifico', 403);
+}
+
+// Richiesta GET: restituisce solo i campi del primo form del workflow, cosi'
+// un form pubblico (senza account) sa cosa mostrare, senza creare nulla.
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    if (!$workflowId) error_response('Specifica ?workflowId= (questo token non e\' vincolato a un workflow specifico)', 400);
+    $wStmt = db()->prepare('SELECT * FROM workflows WHERE id = ? AND company_id = ? AND status = "PUBLISHED"');
+    $wStmt->execute([$workflowId, $companyId]);
+    $w = $wStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$w) error_response('Workflow pubblicato non trovato', 404);
+
+    $vStmt = db()->prepare('SELECT * FROM workflow_versions WHERE workflow_id = ? ORDER BY version DESC LIMIT 1');
+    $vStmt->execute([$w['id']]);
+    $version = $vStmt->fetch(PDO::FETCH_ASSOC);
+    $nodes = $version ? json_decode($version['nodes_json'], true) : [];
+    $formNode = null;
+    foreach ($nodes as $n) { if ($n['type'] === 'form') { $formNode = $n; break; } }
+
+    json_response([
+        'workflowName' => $w['name'],
+        'fields' => $formNode['data']['config']['fields'] ?? [],
+    ]);
 }
 
 $result = create_instance($companyId, $workflowId, $apiToken['created_by_id'], $input['data'] ?? []);

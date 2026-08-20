@@ -3,7 +3,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers.php';
 
 // Ritorna ['companyId' => ..., 'roleKey' => ...] oppure termina con 403
-function require_company(array $user, ?string $companyId): array
+function require_company(array $user, ?string $companyId, string $appKey = 'workflow'): array
 {
     if (!$companyId) error_response('Azienda non specificata', 400);
 
@@ -12,16 +12,16 @@ function require_company(array $user, ?string $companyId): array
     }
 
     // Il ruolo e' specifico per applicazione: lo stesso utente puo' avere un
-    // ruolo diverso per Workflow rispetto ad altre app future, anche nella
+    // ruolo diverso per Workflow rispetto a Ticket (o altre app), anche nella
     // stessa azienda.
     $stmt = db()->prepare("
         SELECT r.role_key FROM user_companies uc
         JOIN user_company_applications uca ON uca.user_company_id = uc.id
-        JOIN applications a ON a.id = uca.application_id AND a.app_key = 'workflow'
+        JOIN applications a ON a.id = uca.application_id AND a.app_key = ?
         JOIN roles r ON r.id = uca.role_id
         WHERE uc.user_id = ? AND uc.company_id = ?
     ");
-    $stmt->execute([$user['id'], $companyId]);
+    $stmt->execute([$appKey, $user['id'], $companyId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row) error_response('Nessun accesso a questa azienda', 403);
 

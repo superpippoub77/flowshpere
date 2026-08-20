@@ -133,10 +133,45 @@ const WORKFLOW_SLIDES: HelpSlide[] = [
   },
 ];
 
+const TICKET_SLIDES: HelpSlide[] = [
+  {
+    title: "Panoramica",
+    intro: "L'app Ticket gestisce le richieste di assistenza, organizzate per \"rami\" (categorie come Tecnico, Amministrativo, Commerciale), ciascuno con un responsabile predefinito.",
+    bullets: [
+      "Ticket: l'elenco di tutte le richieste, filtrabile per ramo, stato e priorità",
+      "Rami di gestione: dove si definiscono le categorie e chi le segue (visibile solo ad Amministratore e Super Amministratore)",
+    ],
+  },
+  {
+    title: "Rami di gestione",
+    bullets: [
+      "Ogni ramo ha un nome, una descrizione e un responsabile predefinito",
+      "Quando arriva un nuovo ticket in quel ramo (creato internamente o da un modulo esterno), viene assegnato in automatico al responsabile predefinito",
+      "L'eliminazione di un ramo è bloccata se ci sono ticket collegati",
+    ],
+  },
+  {
+    title: "Creare e gestire un ticket",
+    bullets: [
+      "\"Nuovo ticket\": oggetto, ramo, priorità (Bassa/Media/Alta/Urgente) e descrizione",
+      "Aprendo un ticket puoi cambiarne lo stato (Aperto → In lavorazione → Risolto → Chiuso) e riassegnarlo a un'altra persona in qualsiasi momento",
+      "La sezione Commenti tiene traccia di tutti gli scambi legati al ticket, in ordine cronologico",
+    ],
+  },
+  {
+    title: "Apertura ticket dall'esterno",
+    bullets: [
+      "In Token API puoi generare un token vincolato a un ramo specifico (o lasciarlo libero)",
+      "Il token genera anche un link a un modulo web pronto da condividere: chi lo apre non ha bisogno di un account per aprire un ticket",
+      "Il ticket aperto dall'esterno riporta nome ed email di chi lo ha scritto, e finisce comunque nel ramo giusto con l'assegnazione automatica",
+    ],
+  },
+];
+
 const APP_CONTENT: Record<string, HelpSlide[] | null> = {
   workflow: WORKFLOW_SLIDES,
   timesheet: null,
-  ticket: null,
+  ticket: TICKET_SLIDES,
   crm: null,
 };
 

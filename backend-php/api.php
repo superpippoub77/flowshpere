@@ -7,6 +7,7 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/tenant.php';
 require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/engine.php';
+require_once __DIR__ . '/includes/tickets.php';
 
 start_session();
 
@@ -108,8 +109,10 @@ switch ($action) {
             $companies = db()->query('SELECT * FROM companies ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
             $apps = db()->query('SELECT * FROM applications WHERE enabled = 1')->fetchAll(PDO::FETCH_ASSOC);
             $appList = array_map(fn($a) => ['key' => $a['app_key'], 'name' => $a['name'], 'category' => $a['category']], $apps);
+            $rolesByApp = array_fill_keys(array_column($appList, 'key'), 'SUPER_ADMIN');
             json_response(array_map(fn($c) => [
-                'id' => $c['id'], 'name' => $c['name'], 'role' => 'Super Amministratore', 'roleKey' => 'SUPER_ADMIN', 'applications' => $appList,
+                'id' => $c['id'], 'name' => $c['name'], 'role' => 'Super Amministratore', 'roleKey' => 'SUPER_ADMIN',
+                'rolesByApp' => $rolesByApp, 'applications' => $appList,
             ], $companies));
         }
 
@@ -126,16 +129,19 @@ switch ($action) {
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Un'azienda puo' comparire piu' volte (una per app abilitata): le raggruppiamo,
-        // usando il ruolo dell'app "workflow" come ruolo mostrato per quell'azienda.
+        // usando il ruolo dell'app "workflow" come ruolo mostrato per quell'azienda
+        // (per compatibilita'), ma esponendo anche il ruolo per-app in rolesByApp,
+        // dato che lo stesso utente puo' avere ruoli diversi su app diverse.
         $byCompany = [];
         foreach ($rows as $row) {
             if (!isset($byCompany[$row['c_id']])) {
-                $byCompany[$row['c_id']] = ['id' => $row['c_id'], 'name' => $row['c_name'], 'role' => $row['r_name'], 'roleKey' => $row['r_key'], 'applications' => []];
+                $byCompany[$row['c_id']] = ['id' => $row['c_id'], 'name' => $row['c_name'], 'role' => $row['r_name'], 'roleKey' => $row['r_key'], 'rolesByApp' => [], 'applications' => []];
             }
             if ($row['app_key'] === 'workflow') {
                 $byCompany[$row['c_id']]['role'] = $row['r_name'];
                 $byCompany[$row['c_id']]['roleKey'] = $row['r_key'];
             }
+            $byCompany[$row['c_id']]['rolesByApp'][$row['app_key']] = $row['r_key'];
             $byCompany[$row['c_id']]['applications'][] = ['key' => $row['app_key'], 'name' => $row['a_name'], 'category' => $row['a_category']];
         }
         json_response(array_values($byCompany));
@@ -553,37 +559,52 @@ switch ($action) {
         $ctx = require_company($user, $input['companyId'] ?? null);
         require_role($ctx['roleKey'], ['ADMIN']);
         $stmt = db()->prepare('
-            SELECT t.id, t.label, t.workflow_id, t.created_at, t.revoked, w.name as workflow_name
-            FROM api_tokens t LEFT JOIN workflows w ON w.id = t.workflow_id
+            SELECT t.id, t.label, t.workflow_id, t.category_id, t.scope, t.created_at, t.revoked,
+                   w.name as workflow_name, tc.name as category_name
+            FROM api_tokens t
+            LEFT JOIN workflows w ON w.id = t.workflow_id
+            LEFT JOIN ticket_categories tc ON tc.id = t.category_id
             WHERE t.company_id = ? ORDER BY t.created_at DESC
         ');
         $stmt->execute([$ctx['companyId']]);
         json_response(array_map(fn($t) => [
-            'id' => $t['id'], 'label' => $t['label'], 'workflowId' => $t['workflow_id'], 'workflowName' => $t['workflow_name'],
+            'id' => $t['id'], 'label' => $t['label'], 'scope' => $t['scope'],
+            'workflowId' => $t['workflow_id'], 'workflowName' => $t['workflow_name'],
+            'categoryId' => $t['category_id'], 'categoryName' => $t['category_name'],
             'createdAt' => $t['created_at'], 'revoked' => (bool) $t['revoked'],
         ], $stmt->fetchAll(PDO::FETCH_ASSOC)));
         break;
 
     case 'apiTokens.create':
-        $ctx = require_company($user, $input['companyId'] ?? null);
-        require_role($ctx['roleKey'], ['ADMIN']);
         require_fields($input, ['label']);
+        $scope = $input['scope'] === 'ticket' ? 'ticket' : 'order';
+        $ctx = require_company($user, $input['companyId'] ?? null, $scope === 'ticket' ? 'ticket' : 'workflow');
+        require_role($ctx['roleKey'], ['ADMIN']);
 
-        $workflowId = !empty($input['workflowId']) ? $input['workflowId'] : null;
-        if ($workflowId) {
+        $workflowId = null;
+        $categoryId = null;
+        if ($scope === 'order' && !empty($input['workflowId'])) {
             $stmt = db()->prepare('SELECT id FROM workflows WHERE id = ? AND company_id = ?');
-            $stmt->execute([$workflowId, $ctx['companyId']]);
+            $stmt->execute([$input['workflowId'], $ctx['companyId']]);
             if (!$stmt->fetch()) error_response('Workflow non trovato', 404);
+            $workflowId = $input['workflowId'];
+        }
+        if ($scope === 'ticket' && !empty($input['categoryId'])) {
+            $stmt = db()->prepare('SELECT id FROM ticket_categories WHERE id = ? AND company_id = ?');
+            $stmt->execute([$input['categoryId'], $ctx['companyId']]);
+            if (!$stmt->fetch()) error_response('Ramo ticket non trovato', 404);
+            $categoryId = $input['categoryId'];
         }
 
         $id = new_id('tok');
         $jti = new_id('jti');
-        db()->prepare('INSERT INTO api_tokens (id, company_id, workflow_id, label, jti, created_by_id) VALUES (?, ?, ?, ?, ?, ?)')
-            ->execute([$id, $ctx['companyId'], $workflowId, $input['label'], $jti, $user['id']]);
+        db()->prepare('INSERT INTO api_tokens (id, company_id, workflow_id, category_id, scope, label, jti, created_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            ->execute([$id, $ctx['companyId'], $workflowId, $categoryId, $scope, $input['label'], $jti, $user['id']]);
 
         // Token senza scadenza (revocabile in qualsiasi momento tramite jti):
         // funziona quindi sia come JWT "vero" sia come API key stabile per integrazioni esterne.
-        $token = jwt_encode(['type' => 'external_order', 'companyId' => $ctx['companyId'], 'workflowId' => $workflowId, 'jti' => $jti]);
+        $tokenType = $scope === 'ticket' ? 'external_ticket' : 'external_order';
+        $token = jwt_encode(['type' => $tokenType, 'companyId' => $ctx['companyId'], 'workflowId' => $workflowId, 'categoryId' => $categoryId, 'jti' => $jti]);
         log_audit($ctx['companyId'], $user['id'], null, 'Token API creato: "' . $input['label'] . '"');
         json_response(['id' => $id, 'token' => $token], 201);
         break;
@@ -602,6 +623,158 @@ switch ($action) {
         require_fields($input, ['id']);
         db()->prepare('DELETE FROM api_tokens WHERE id = ? AND company_id = ?')->execute([$input['id'], $ctx['companyId']]);
         json_response(['ok' => true]);
+        break;
+
+    case 'ticketCategories.list':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'ticket');
+        $stmt = db()->prepare('
+            SELECT tc.*, u.full_name as assignee_name FROM ticket_categories tc
+            LEFT JOIN users u ON u.id = tc.default_assignee_id
+            WHERE tc.company_id = ? ORDER BY tc.name
+        ');
+        $stmt->execute([$ctx['companyId']]);
+        json_response(array_map(fn($c) => [
+            'id' => $c['id'], 'name' => $c['name'], 'description' => $c['description'],
+            'defaultAssigneeId' => $c['default_assignee_id'], 'defaultAssigneeName' => $c['assignee_name'],
+        ], $stmt->fetchAll(PDO::FETCH_ASSOC)));
+        break;
+
+    case 'ticketCategories.create':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'ticket');
+        require_role($ctx['roleKey'], ['ADMIN']);
+        require_fields($input, ['name']);
+        $id = new_id('tcat');
+        db()->prepare('INSERT INTO ticket_categories (id, company_id, name, description, default_assignee_id) VALUES (?, ?, ?, ?, ?)')
+            ->execute([$id, $ctx['companyId'], $input['name'], $input['description'] ?? null, $input['defaultAssigneeId'] ?? null]);
+        json_response(['id' => $id], 201);
+        break;
+
+    case 'ticketCategories.update':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'ticket');
+        require_role($ctx['roleKey'], ['ADMIN']);
+        require_fields($input, ['id', 'name']);
+        db()->prepare('UPDATE ticket_categories SET name = ?, description = ?, default_assignee_id = ? WHERE id = ? AND company_id = ?')
+            ->execute([$input['name'], $input['description'] ?? null, $input['defaultAssigneeId'] ?? null, $input['id'], $ctx['companyId']]);
+        json_response(['ok' => true]);
+        break;
+
+    case 'ticketCategories.delete':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'ticket');
+        require_role($ctx['roleKey'], ['ADMIN']);
+        require_fields($input, ['id']);
+        $stmt = db()->prepare('SELECT COUNT(*) as c FROM tickets WHERE category_id = ?');
+        $stmt->execute([$input['id']]);
+        if ((int) $stmt->fetch(PDO::FETCH_ASSOC)['c'] > 0) {
+            error_response('Impossibile eliminare: ci sono ticket collegati a questo ramo.', 409);
+        }
+        db()->prepare('DELETE FROM ticket_categories WHERE id = ? AND company_id = ?')->execute([$input['id'], $ctx['companyId']]);
+        json_response(['ok' => true]);
+        break;
+
+    case 'tickets.list':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'ticket');
+        $pageSize = 10;
+        $page = max(1, (int) ($input['page'] ?? 1));
+        $offset = ($page - 1) * $pageSize;
+
+        $where = ['t.company_id = ?'];
+        $params = [$ctx['companyId']];
+        if (!empty($input['categoryId'])) { $where[] = 't.category_id = ?'; $params[] = $input['categoryId']; }
+        if (!empty($input['status'])) { $where[] = 't.status = ?'; $params[] = $input['status']; }
+        if (!empty($input['priority'])) { $where[] = 't.priority = ?'; $params[] = $input['priority']; }
+        if (!empty($input['code'])) { $where[] = 't.code LIKE ?'; $params[] = '%' . $input['code'] . '%'; }
+        $whereSql = implode(' AND ', $where);
+
+        $countStmt = db()->prepare("SELECT COUNT(*) as c FROM tickets t WHERE $whereSql");
+        $countStmt->execute($params);
+        $total = (int) $countStmt->fetch(PDO::FETCH_ASSOC)['c'];
+
+        $stmt = db()->prepare("
+            SELECT t.*, tc.name as category_name, u.full_name as assignee_name FROM tickets t
+            LEFT JOIN ticket_categories tc ON tc.id = t.category_id
+            LEFT JOIN users u ON u.id = t.assigned_to_id
+            WHERE $whereSql ORDER BY t.updated_at DESC LIMIT $pageSize OFFSET $offset
+        ");
+        $stmt->execute($params);
+        json_response([
+            'items' => array_map(fn($t) => [
+                'id' => $t['id'], 'code' => $t['code'], 'subject' => $t['subject'], 'status' => $t['status'], 'priority' => $t['priority'],
+                'categoryId' => $t['category_id'], 'categoryName' => $t['category_name'],
+                'assignedToId' => $t['assigned_to_id'], 'assignedToName' => $t['assignee_name'],
+                'customerName' => $t['customer_name'], 'createdAt' => $t['created_at'], 'updatedAt' => $t['updated_at'],
+            ], $stmt->fetchAll(PDO::FETCH_ASSOC)),
+            'total' => $total, 'page' => $page, 'pageSize' => $pageSize,
+        ]);
+        break;
+
+    case 'tickets.create':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'ticket');
+        require_fields($input, ['subject']);
+        $result = create_ticket($ctx['companyId'], [
+            'categoryId' => $input['categoryId'] ?? null, 'subject' => $input['subject'],
+            'description' => $input['description'] ?? '', 'priority' => $input['priority'] ?? 'MEDIA',
+            'createdById' => $user['id'],
+        ]);
+        json_response($result, 201);
+        break;
+
+    case 'tickets.get':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'ticket');
+        require_fields($input, ['id']);
+        $stmt = db()->prepare('
+            SELECT t.*, tc.name as category_name, u.full_name as assignee_name FROM tickets t
+            LEFT JOIN ticket_categories tc ON tc.id = t.category_id
+            LEFT JOIN users u ON u.id = t.assigned_to_id
+            WHERE t.id = ? AND t.company_id = ?
+        ');
+        $stmt->execute([$input['id'], $ctx['companyId']]);
+        $t = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$t) error_response('Ticket non trovato', 404);
+
+        $cStmt = db()->prepare('
+            SELECT c.*, u.full_name as user_name FROM ticket_comments c
+            LEFT JOIN users u ON u.id = c.author_id
+            WHERE c.ticket_id = ? ORDER BY c.created_at ASC
+        ');
+        $cStmt->execute([$t['id']]);
+        $comments = array_map(fn($c) => [
+            'id' => $c['id'], 'body' => $c['body'], 'createdAt' => $c['created_at'],
+            'authorName' => $c['user_name'] ?? $c['author_name'] ?? 'Esterno',
+        ], $cStmt->fetchAll(PDO::FETCH_ASSOC));
+
+        json_response([
+            'id' => $t['id'], 'code' => $t['code'], 'subject' => $t['subject'], 'description' => decrypt_data($t['description']),
+            'status' => $t['status'], 'priority' => $t['priority'], 'categoryId' => $t['category_id'], 'categoryName' => $t['category_name'],
+            'assignedToId' => $t['assigned_to_id'], 'assignedToName' => $t['assignee_name'],
+            'customerName' => $t['customer_name'], 'customerEmail' => $t['customer_email'],
+            'createdAt' => $t['created_at'], 'updatedAt' => $t['updated_at'], 'comments' => $comments,
+        ]);
+        break;
+
+    case 'tickets.updateStatus':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'ticket');
+        require_fields($input, ['id', 'status']);
+        $status = in_array($input['status'], ['APERTO', 'IN_LAVORAZIONE', 'RISOLTO', 'CHIUSO'], true) ? $input['status'] : 'APERTO';
+        db()->prepare('UPDATE tickets SET status = ?, updated_at = datetime("now") WHERE id = ? AND company_id = ?')
+            ->execute([$status, $input['id'], $ctx['companyId']]);
+        json_response(['ok' => true]);
+        break;
+
+    case 'tickets.assign':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'ticket');
+        require_fields($input, ['id']);
+        db()->prepare('UPDATE tickets SET assigned_to_id = ?, updated_at = datetime("now") WHERE id = ? AND company_id = ?')
+            ->execute([$input['assignedToId'] ?? null, $input['id'], $ctx['companyId']]);
+        json_response(['ok' => true]);
+        break;
+
+    case 'tickets.comment':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'ticket');
+        require_fields($input, ['id', 'body']);
+        db()->prepare('INSERT INTO ticket_comments (id, ticket_id, author_id, body) VALUES (?, ?, ?, ?)')
+            ->execute([new_id('tcm'), $input['id'], $user['id'], $input['body']]);
+        db()->prepare('UPDATE tickets SET updated_at = datetime("now") WHERE id = ?')->execute([$input['id']]);
+        json_response(['ok' => true], 201);
         break;
 
     case 'customers.search':

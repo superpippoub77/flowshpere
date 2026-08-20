@@ -143,6 +143,60 @@ function run_migrations(PDO $pdo): void
             )
         ");
     }
+
+    if (!$hasColumn('api_tokens', 'scope')) {
+        $pdo->exec("ALTER TABLE api_tokens ADD COLUMN scope TEXT NOT NULL DEFAULT 'order'");
+    }
+    if (!$hasColumn('api_tokens', 'category_id')) {
+        $pdo->exec('ALTER TABLE api_tokens ADD COLUMN category_id TEXT');
+    }
+
+    if (!$tableExists('ticket_categories')) {
+        $pdo->exec("
+            CREATE TABLE ticket_categories (
+                id TEXT PRIMARY KEY,
+                company_id TEXT NOT NULL REFERENCES companies(id),
+                name TEXT NOT NULL,
+                description TEXT,
+                default_assignee_id TEXT REFERENCES users(id),
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ");
+    }
+
+    if (!$tableExists('tickets')) {
+        $pdo->exec("
+            CREATE TABLE tickets (
+                id TEXT PRIMARY KEY,
+                company_id TEXT NOT NULL REFERENCES companies(id),
+                category_id TEXT REFERENCES ticket_categories(id),
+                code TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                description TEXT,
+                priority TEXT NOT NULL DEFAULT 'MEDIA',
+                status TEXT NOT NULL DEFAULT 'APERTO',
+                customer_name TEXT,
+                customer_email TEXT,
+                created_by_id TEXT REFERENCES users(id),
+                assigned_to_id TEXT REFERENCES users(id),
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ");
+    }
+
+    if (!$tableExists('ticket_comments')) {
+        $pdo->exec("
+            CREATE TABLE ticket_comments (
+                id TEXT PRIMARY KEY,
+                ticket_id TEXT NOT NULL REFERENCES tickets(id),
+                author_id TEXT REFERENCES users(id),
+                author_name TEXT,
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ");
+    }
 }
 
 function new_id(string $prefix = ''): string
@@ -295,7 +349,9 @@ function create_schema(PDO $pdo): void
             jti TEXT UNIQUE NOT NULL,
             created_by_id TEXT NOT NULL REFERENCES users(id),
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            revoked INTEGER NOT NULL DEFAULT 0
+            revoked INTEGER NOT NULL DEFAULT 0,
+            scope TEXT NOT NULL DEFAULT 'order',
+            category_id TEXT
         );
 
         CREATE TABLE customers (
@@ -304,6 +360,41 @@ function create_schema(PDO $pdo): void
             name TEXT NOT NULL,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE(company_id, name)
+        );
+
+        CREATE TABLE ticket_categories (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id),
+            name TEXT NOT NULL,
+            description TEXT,
+            default_assignee_id TEXT REFERENCES users(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE tickets (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id),
+            category_id TEXT REFERENCES ticket_categories(id),
+            code TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            description TEXT,
+            priority TEXT NOT NULL DEFAULT 'MEDIA',
+            status TEXT NOT NULL DEFAULT 'APERTO',
+            customer_name TEXT,
+            customer_email TEXT,
+            created_by_id TEXT REFERENCES users(id),
+            assigned_to_id TEXT REFERENCES users(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE ticket_comments (
+            id TEXT PRIMARY KEY,
+            ticket_id TEXT NOT NULL REFERENCES tickets(id),
+            author_id TEXT REFERENCES users(id),
+            author_name TEXT,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
         CREATE TABLE ai_decisions (

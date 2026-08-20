@@ -5,6 +5,7 @@ export interface CompanyOption {
   name: string;
   role: string;
   roleKey: string;
+  rolesByApp?: Record<string, string>;
   applications: { key: string; name: string; category?: string }[];
 }
 
