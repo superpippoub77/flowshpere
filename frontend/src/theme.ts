@@ -6,10 +6,17 @@ import { createTheme } from "@mui/material/styles";
 // cianotipo, righe guida, timbri d'angolo, dati in monospace.
 // Il tema chiaro riprende la stessa identita' su carta chiara invece che
 // sul "tavolo da disegno" scuro.
-export function buildTheme(mode: "dark" | "light") {
+export type Density = "comfortable" | "compact";
+
+export function buildTheme(mode: "dark" | "light", density: Density = "comfortable") {
   const dark = mode === "dark";
+  const compact = density === "compact";
 
   return createTheme({
+    // La unita' di spaziatura di MUI (usata da ogni sx={{ p: N, m: N, gap: N }}
+    // di tutta l'app): comprimerla qui rende tutto piu' compatto senza dover
+    // toccare ogni singola pagina.
+    spacing: compact ? 6 : 8,
     palette: {
       mode,
       primary: { main: dark ? "#7fb8d9" : "#1b6a94", contrastText: dark ? "#0e1a2b" : "#ffffff" },
@@ -49,6 +56,7 @@ export function buildTheme(mode: "dark" | "light") {
         },
       },
       MuiButton: {
+        defaultProps: compact ? { size: "small" } : undefined,
         styleOverrides: {
           root: { borderRadius: 4 },
           contained: { boxShadow: "none" },
@@ -58,6 +66,17 @@ export function buildTheme(mode: "dark" | "light") {
         styleOverrides: {
           root: { fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, letterSpacing: "0.03em" },
         },
+      },
+      MuiTableCell: {
+        styleOverrides: {
+          root: { padding: compact ? "6px 10px" : undefined },
+        },
+      },
+      MuiListItemButton: {
+        defaultProps: compact ? { dense: true } : undefined,
+      },
+      MuiTextField: {
+        defaultProps: compact ? { size: "small" } : undefined,
       },
     },
   });

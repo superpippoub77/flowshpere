@@ -8,6 +8,7 @@ import {
   Button,
   Paper,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -123,6 +124,7 @@ export function WorkflowListPage() {
       </Stack>
 
       <Paper>
+        <TableContainer>
         <Table>
           <TableHead>
             <TableRow>
@@ -237,6 +239,7 @@ export function WorkflowListPage() {
             )}
           </TableBody>
         </Table>
+      </TableContainer>
       </Paper>
 
       {totalPages > 1 && (

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Box, Stack, Typography, Paper, TextField, MenuItem, Table, TableHead, TableRow, TableCell, TableBody } from "@mui/material";
+import { Box, Stack, Typography, Paper, TextField, MenuItem, Table, TableContainer, TableHead, TableRow, TableCell, TableBody } from "@mui/material";
 import { api } from "../../api/client";
 
 const ROLE_OPTIONS = [
@@ -66,7 +66,8 @@ export function AdminPermissionsPage() {
                 {category}
               </Typography>
               <Paper sx={{ mt: 1 }}>
-                <Table>
+                <TableContainer>
+        <Table>
                   <TableHead>
                     <TableRow>
                       <TableCell>Azienda</TableCell>
@@ -100,6 +101,7 @@ export function AdminPermissionsPage() {
                     ))}
                   </TableBody>
                 </Table>
+      </TableContainer>
               </Paper>
             </Box>
           ))}

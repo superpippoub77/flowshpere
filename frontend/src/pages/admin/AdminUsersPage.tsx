@@ -7,6 +7,7 @@ import {
   Button,
   Paper,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -128,6 +129,7 @@ export function AdminUsersPage() {
       </Stack>
 
       <Paper>
+        <TableContainer>
         <Table>
           <TableHead>
             <TableRow>
@@ -216,6 +218,7 @@ export function AdminUsersPage() {
             )}
           </TableBody>
         </Table>
+      </TableContainer>
       </Paper>
 
       {totalPages > 1 && (

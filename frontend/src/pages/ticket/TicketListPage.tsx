@@ -7,6 +7,7 @@ import {
   Button,
   Paper,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -112,6 +113,7 @@ export function TicketListPage() {
       </Stack>
 
       <Paper>
+        <TableContainer>
         <Table>
           <TableHead>
             <TableRow>
@@ -223,6 +225,7 @@ export function TicketListPage() {
             )}
           </TableBody>
         </Table>
+      </TableContainer>
       </Paper>
 
       {totalPages > 1 && (

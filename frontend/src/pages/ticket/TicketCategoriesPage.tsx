@@ -7,6 +7,7 @@ import {
   Button,
   Paper,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -112,6 +113,7 @@ export function TicketCategoriesPage() {
       </Stack>
 
       <Paper>
+        <TableContainer>
         <Table>
           <TableHead>
             <TableRow>
@@ -139,6 +141,7 @@ export function TicketCategoriesPage() {
             ))}
           </TableBody>
         </Table>
+      </TableContainer>
       </Paper>
 
       <Dialog open={open} onClose={closeDialog} fullWidth maxWidth="xs">

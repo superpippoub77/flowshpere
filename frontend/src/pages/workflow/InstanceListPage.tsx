@@ -7,6 +7,7 @@ import {
   Button,
   Paper,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -163,6 +164,7 @@ export function InstanceListPage() {
       </ToggleButtonGroup>
 
       <Paper>
+        <TableContainer>
         <Table>
           <TableHead>
             <TableRow>
@@ -299,6 +301,7 @@ export function InstanceListPage() {
             )}
           </TableBody>
         </Table>
+      </TableContainer>
       </Paper>
 
       {totalPages > 1 && (

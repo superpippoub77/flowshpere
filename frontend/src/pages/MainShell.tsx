@@ -39,6 +39,8 @@ import LoginIcon from "@mui/icons-material/LoginOutlined";
 import LogoutIcon from "@mui/icons-material/LogoutOutlined";
 import AccountCircleIcon from "@mui/icons-material/AccountCircleOutlined";
 import LightModeIcon from "@mui/icons-material/LightModeOutlined";
+import ViewCompactIcon from "@mui/icons-material/ViewCompactOutlined";
+import ViewComfortableIcon from "@mui/icons-material/ViewComfyOutlined";
 import DarkModeIcon from "@mui/icons-material/DarkModeOutlined";
 import TranslateIcon from "@mui/icons-material/TranslateOutlined";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutlineOutlined";
@@ -52,16 +54,16 @@ import { StatusBar } from "../components/StatusBar";
 import { HelpWizard } from "../components/HelpWizard";
 import { appKeyFromPath } from "../lib/appKey";
 
-const APP_OPERATIONS: Record<string, { label: string; to: string; icon: JSX.Element; adminOnly?: boolean }[]> = {
+const APP_OPERATIONS: Record<string, { label: string; to: string; icon: JSX.Element; adminOnly?: boolean; badgeKey?: string }[]> = {
   workflow: [
     { label: "Dashboard", to: "/workflow/dashboard", icon: <DashboardIcon fontSize="small" /> },
     { label: "Designer workflow", to: "/workflow/designer", icon: <AccountTreeIcon fontSize="small" />, adminOnly: true },
-    { label: "Istanze", to: "/workflow/instances", icon: <ListAltIcon fontSize="small" /> },
+    { label: "Istanze", to: "/workflow/instances", icon: <ListAltIcon fontSize="small" />, badgeKey: "workflow" },
     { label: "Token API", to: "/workflow/api-tokens", icon: <VpnKeyIcon fontSize="small" />, adminOnly: true },
   ],
   timesheet: [{ label: "Presto disponibile", to: "#", icon: <ScheduleIcon fontSize="small" /> }],
   ticket: [
-    { label: "Ticket", to: "/ticket/tickets", icon: <ConfirmationNumberIcon fontSize="small" /> },
+    { label: "Ticket", to: "/ticket/tickets", icon: <ConfirmationNumberIcon fontSize="small" />, badgeKey: "ticket" },
     { label: "Rami di gestione", to: "/ticket/categories", icon: <ListAltIcon fontSize="small" />, adminOnly: true },
     { label: "Token API", to: "/workflow/api-tokens", icon: <VpnKeyIcon fontSize="small" />, adminOnly: true },
   ],
@@ -102,7 +104,7 @@ function CollapsedAppButton({
 }: {
   icon: JSX.Element;
   label: string;
-  operations: { to: string; icon: JSX.Element; label: string }[];
+  operations: { to: string; icon: JSX.Element; label: string; pending?: number; done?: number }[];
 }) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   return (
@@ -123,6 +125,12 @@ function CollapsedAppButton({
           <MenuItem key={op.to} component={NavLink} to={op.to} onClick={() => setAnchor(null)}>
             <ListItemIcon sx={{ minWidth: 32 }}>{op.icon}</ListItemIcon>
             {op.label}
+            {typeof op.pending === "number" && op.pending > 0 && (
+              <Chip size="small" label={op.pending} sx={{ height: 18, fontSize: 11, ml: 1, bgcolor: "var(--signal-amber)", color: "#1a1200", fontWeight: 700 }} />
+            )}
+            {typeof op.done === "number" && op.done > 0 && (
+              <Chip size="small" label={op.done} sx={{ height: 18, fontSize: 11, ml: 0.5, bgcolor: "var(--verdigris)", color: "#04140f", fontWeight: 700 }} />
+            )}
           </MenuItem>
         ))}
       </Menu>
@@ -130,7 +138,19 @@ function CollapsedAppButton({
   );
 }
 
-function NavItem({ to, icon, label }: { to: string; icon: JSX.Element; label: string }) {
+function NavItem({
+  to,
+  icon,
+  label,
+  pending,
+  done,
+}: {
+  to: string;
+  icon: JSX.Element;
+  label: string;
+  pending?: number;
+  done?: number;
+}) {
   return (
     <ListItemButton
       component={NavLink}
@@ -152,6 +172,16 @@ function NavItem({ to, icon, label }: { to: string; icon: JSX.Element; label: st
     >
       <ListItemIcon sx={{ minWidth: 32, color: "inherit" }}>{icon}</ListItemIcon>
       <ListItemText primary={label} primaryTypographyProps={{ fontSize: 13.5 }} />
+      {typeof pending === "number" && pending > 0 && (
+        <Tooltip title="Da elaborare">
+          <Chip size="small" label={pending} sx={{ height: 18, fontSize: 11, mr: 0.5, bgcolor: "var(--signal-amber)", color: "#1a1200", fontWeight: 700 }} />
+        </Tooltip>
+      )}
+      {typeof done === "number" && done > 0 && (
+        <Tooltip title="Elaborati di recente">
+          <Chip size="small" label={done} sx={{ height: 18, fontSize: 11, bgcolor: "var(--verdigris)", color: "#04140f", fontWeight: 700 }} />
+        </Tooltip>
+      )}
     </ListItemButton>
   );
 }
@@ -168,7 +198,7 @@ export function MainShell() {
   const getCurrentCompanyForApp = useAuthStore((s) => s.getCurrentCompanyForApp);
   const currentCompanyId = getCurrentCompanyForApp(appKey);
   const logout = useAuthStore((s) => s.logout);
-  const { mode, toggle: toggleTheme } = useThemeMode();
+  const { mode, toggle: toggleTheme, density, setDensity } = useThemeMode();
   const { lang, setLang, t } = useI18n();
 
   const { data } = useQuery({
@@ -320,37 +350,25 @@ export function MainShell() {
                       key={appItem.key}
                       icon={APP_ICONS[appItem.key] ?? <AccountTreeIcon />}
                       label={appItem.name}
-                      operations={(APP_OPERATIONS[appItem.key] ?? []).filter((op) => {
-                        if (!op.adminOnly) return true;
-                        if (user?.isSuperAdmin) return true;
-                        const appCompanyId = getCurrentCompanyForApp(appItem.key);
-                        const appCompany = list.find((c: any) => c.id === appCompanyId);
-                        return (appCompany?.rolesByApp?.[appItem.key] ?? appCompany?.roleKey) === "ADMIN";
-                      })}
+                      operations={(APP_OPERATIONS[appItem.key] ?? [])
+                        .filter((op) => {
+                          if (!op.adminOnly) return true;
+                          if (user?.isSuperAdmin) return true;
+                          const appCompanyId = getCurrentCompanyForApp(appItem.key);
+                          const appCompany = list.find((c: any) => c.id === appCompanyId);
+                          return (appCompany?.rolesByApp?.[appItem.key] ?? appCompany?.roleKey) === "ADMIN";
+                        })
+                        .map((op) => ({
+                          ...op,
+                          pending: op.badgeKey ? APP_BADGES[op.badgeKey]?.pending : undefined,
+                          done: op.badgeKey ? APP_BADGES[op.badgeKey]?.done : undefined,
+                        }))}
                     />
                   ) : (
                     <Box key={appItem.key}>
                       <ListItemButton onClick={() => setOpenApps((o) => ({ ...o, [appItem.key]: !o[appItem.key] }))} sx={{ borderRadius: 1 }}>
                         <ListItemIcon sx={{ minWidth: 34, color: "primary.main" }}>{APP_ICONS[appItem.key] ?? <AccountTreeIcon />}</ListItemIcon>
                         <ListItemText primary={appItem.name} primaryTypographyProps={{ fontSize: 14, fontWeight: 600 }} />
-                        {typeof APP_BADGES[appItem.key]?.pending === "number" && APP_BADGES[appItem.key].pending! > 0 && (
-                          <Tooltip title="Da elaborare">
-                            <Chip
-                              size="small"
-                              label={APP_BADGES[appItem.key].pending}
-                              sx={{ height: 18, fontSize: 11, mr: 0.5, bgcolor: "var(--signal-amber)", color: "#1a1200", fontWeight: 700 }}
-                            />
-                          </Tooltip>
-                        )}
-                        {typeof APP_BADGES[appItem.key]?.done === "number" && APP_BADGES[appItem.key].done! > 0 && (
-                          <Tooltip title="Elaborati di recente">
-                            <Chip
-                              size="small"
-                              label={APP_BADGES[appItem.key].done}
-                              sx={{ height: 18, fontSize: 11, mr: 0.5, bgcolor: "var(--verdigris)", color: "#04140f", fontWeight: 700 }}
-                            />
-                          </Tooltip>
-                        )}
                         <Tooltip title={`Guida ${appItem.name}`}>
                           <IconButton
                             size="small"
@@ -376,7 +394,14 @@ export function MainShell() {
                               return (appCompany?.rolesByApp?.[appItem.key] ?? appCompany?.roleKey) === "ADMIN";
                             })
                             .map((op) => (
-                              <NavItem key={op.to} to={op.to} icon={op.icon} label={op.label} />
+                              <NavItem
+                                key={op.to}
+                                to={op.to}
+                                icon={op.icon}
+                                label={op.label}
+                                pending={op.badgeKey ? APP_BADGES[op.badgeKey]?.pending : undefined}
+                                done={op.badgeKey ? APP_BADGES[op.badgeKey]?.done : undefined}
+                              />
                             ))}
                         </List>
                       </Collapse>
@@ -462,6 +487,11 @@ export function MainShell() {
           <GlobalSearch />
 
           <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Tooltip title={density === "compact" ? "Vista compatta (clicca per confortevole)" : "Vista confortevole (clicca per compatta)"}>
+              <IconButton size="small" onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}>
+                {density === "compact" ? <ViewCompactIcon fontSize="small" /> : <ViewComfortableIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
             <Tooltip title={mode === "dark" ? t("light_theme") : t("dark_theme")}>
               <IconButton size="small" onClick={toggleTheme}>
                 {mode === "dark" ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}

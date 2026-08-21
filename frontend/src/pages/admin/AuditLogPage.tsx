@@ -6,6 +6,7 @@ import {
   Typography,
   Paper,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -78,6 +79,7 @@ export function AuditLogPage() {
       </Paper>
 
       <Paper>
+        <TableContainer>
         <Table>
           <TableHead>
             <TableRow>
@@ -109,6 +111,7 @@ export function AuditLogPage() {
             )}
           </TableBody>
         </Table>
+      </TableContainer>
       </Paper>
 
       {totalPages > 1 && (

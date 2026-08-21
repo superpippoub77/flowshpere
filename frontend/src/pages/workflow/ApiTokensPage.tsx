@@ -7,6 +7,7 @@ import {
   Button,
   Paper,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -119,6 +120,7 @@ export function ApiTokensPage() {
       </Stack>
 
       <Paper>
+        <TableContainer>
         <Table>
           <TableHead>
             <TableRow>
@@ -178,6 +180,7 @@ export function ApiTokensPage() {
             )}
           </TableBody>
         </Table>
+      </TableContainer>
       </Paper>
 
       <Dialog open={open} onClose={closeDialog} fullWidth maxWidth="sm">
