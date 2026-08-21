@@ -253,6 +253,39 @@ function run_migrations(PDO $pdo): void
             )
         ");
     }
+
+    // Un'installazione gia' in uso (non un database nuovo) potrebbe non avere
+    // mai visto l'app "notes": la sua registrazione e la concessione dei
+    // permessi agli utenti esistenti avvengono di norma solo in seed.php, che
+    // per sicurezza va cancellato dal server dopo il primo utilizzo e quindi
+    // non e' piu' rieseguibile. Qui la registriamo e la concediamo in modo
+    // automatico e idempotente ad ogni avvio, cosi' compare anche senza dover
+    // rieseguire seed.php.
+    $notesApp = $pdo->query("SELECT id FROM applications WHERE app_key = 'notes'")->fetch(PDO::FETCH_ASSOC);
+    if (!$notesApp) {
+        $notesAppId = 'app_' . bin2hex(random_bytes(8));
+        $pdo->prepare("INSERT INTO applications (id, app_key, name, category, enabled) VALUES (?, 'notes', 'Note', 'Produttivita''', 1)")
+            ->execute([$notesAppId]);
+    } else {
+        $notesAppId = $notesApp['id'];
+    }
+
+    $workflowApp = $pdo->query("SELECT id FROM applications WHERE app_key = 'workflow'")->fetch(PDO::FETCH_ASSOC);
+    if ($workflowApp) {
+        $missing = $pdo->prepare("
+            SELECT uca.user_company_id, uca.role_id FROM user_company_applications uca
+            WHERE uca.application_id = ?
+            AND NOT EXISTS (
+                SELECT 1 FROM user_company_applications uca2
+                WHERE uca2.user_company_id = uca.user_company_id AND uca2.application_id = ?
+            )
+        ");
+        $missing->execute([$workflowApp['id'], $notesAppId]);
+        foreach ($missing->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $pdo->prepare('INSERT INTO user_company_applications (id, user_company_id, application_id, role_id) VALUES (?, ?, ?, ?)')
+                ->execute(['uca_' . bin2hex(random_bytes(8)), $row['user_company_id'], $notesAppId, $row['role_id']]);
+        }
+    }
 }
 
 function new_id(string $prefix = ''): string
