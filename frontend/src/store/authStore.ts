@@ -18,6 +18,13 @@ interface AuthState {
   // "_default" resta come ripiego generale per le pagine non legate a un'app
   // specifica (es. Amministrazione).
   currentCompanyIdByApp: Record<string, string>;
+  // Alias di compatibilita' con la vecchia API a singolo selettore globale:
+  // tenuti solo perche' alcuni file residui di versioni precedenti dell'app
+  // (mai piu' referenziati dalle rotte attuali) potrebbero ancora esistere
+  // nella copia di qualcuno e aspettarsi questi due nomi. Puntano entrambi
+  // allo slot "_default" di currentCompanyIdByApp.
+  currentCompanyId: string | null;
+  setCurrentCompany: (companyId: string) => void;
   setSession: (token: string, user: AuthState["user"]) => void;
   setCompanies: (companies: CompanyOption[]) => void;
   setCurrentCompanyForApp: (appKey: string, companyId: string) => void;
@@ -42,6 +49,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: parsedStored.user ?? null,
   companies: [],
   currentCompanyIdByApp: initialByApp,
+  currentCompanyId: initialByApp._default ?? null,
+  setCurrentCompany: (companyId) => get().setCurrentCompanyForApp("_default", companyId),
   setSession: (token, user) => {
     set({ token, user });
     persist({ token, user });
@@ -49,7 +58,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setCompanies: (companies) => set({ companies }),
   setCurrentCompanyForApp: (appKey, companyId) => {
     const next = { ...get().currentCompanyIdByApp, [appKey]: companyId, _default: companyId };
-    set({ currentCompanyIdByApp: next });
+    set({ currentCompanyIdByApp: next, currentCompanyId: next._default });
     persist({ currentCompanyIdByApp: next });
   },
   getCurrentCompanyForApp: (appKey) => {
@@ -58,6 +67,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   logout: () => {
     localStorage.removeItem("wf_session");
-    set({ token: null, user: null, currentCompanyIdByApp: {}, companies: [] });
+    set({ token: null, user: null, currentCompanyIdByApp: {}, currentCompanyId: null, companies: [] });
   },
 }));
