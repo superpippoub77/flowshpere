@@ -10,6 +10,7 @@ require_once __DIR__ . '/includes/engine.php';
 require_once __DIR__ . '/includes/settings.php';
 require_once __DIR__ . '/includes/mailer.php';
 require_once __DIR__ . '/includes/notifications.php';
+require_once __DIR__ . '/includes/notes.php';
 require_once __DIR__ . '/includes/tickets.php';
 
 start_session();
@@ -1286,6 +1287,108 @@ switch ($action) {
                 'ip' => $l['ip'], 'createdAt' => $l['created_at'], 'instanceId' => $l['instance_id'],
             ], $stmt->fetchAll(PDO::FETCH_ASSOC)),
             'total' => $total, 'page' => $page, 'pageSize' => $pageSize,
+        ]);
+        break;
+
+    // ---------------- NOTE (app "Obsidian-style") ----------------
+
+    case 'notes.listPaginated':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'notes');
+        $pageSize = 15;
+        $page = max(1, (int) ($input['page'] ?? 1));
+        $offset = ($page - 1) * $pageSize;
+
+        $where = ['n.company_id = ?'];
+        $params = [$ctx['companyId']];
+        [$fmWhere, $fmParams] = apply_datagrid_filters($input['filterModel'] ?? null, ['title' => 'n.title']);
+        $where = array_merge($where, $fmWhere);
+        $params = array_merge($params, $fmParams);
+        $whereSql = implode(' AND ', $where);
+
+        $countStmt = db()->prepare("SELECT COUNT(*) as c FROM notes n WHERE $whereSql");
+        $countStmt->execute($params);
+        $total = (int) $countStmt->fetch(PDO::FETCH_ASSOC)['c'];
+
+        $stmt = db()->prepare("
+            SELECT n.*, u.full_name as updated_by_name,
+                (SELECT COUNT(*) FROM note_links WHERE target_note_id = n.id) as backlink_count
+            FROM notes n
+            LEFT JOIN users u ON u.id = n.updated_by_id
+            WHERE $whereSql ORDER BY n.updated_at DESC LIMIT $pageSize OFFSET $offset
+        ");
+        $stmt->execute($params);
+        json_response([
+            'items' => array_map(fn($n) => [
+                'id' => $n['id'], 'title' => $n['title'], 'updatedAt' => $n['updated_at'],
+                'updatedByName' => $n['updated_by_name'], 'backlinkCount' => (int) $n['backlink_count'],
+            ], $stmt->fetchAll(PDO::FETCH_ASSOC)),
+            'total' => $total, 'page' => $page, 'pageSize' => $pageSize,
+        ]);
+        break;
+
+    case 'notes.create':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'notes');
+        require_fields($input, ['title']);
+        $id = new_id('note');
+        db()->prepare('INSERT INTO notes (id, company_id, title, content, created_by_id, updated_by_id) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([$id, $ctx['companyId'], $input['title'], $input['content'] ?? '', $user['id'], $user['id']]);
+        sync_note_links($ctx['companyId'], $id, $input['content'] ?? '', $user['id']);
+        log_audit($ctx['companyId'], $user['id'], null, 'Nota creata: "' . $input['title'] . '"');
+        json_response(['id' => $id], 201);
+        break;
+
+    case 'notes.get':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'notes');
+        require_fields($input, ['id']);
+        $stmt = db()->prepare('SELECT * FROM notes WHERE id = ? AND company_id = ?');
+        $stmt->execute([$input['id'], $ctx['companyId']]);
+        $note = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$note) error_response('Nota non trovata', 404);
+
+        $outStmt = db()->prepare('SELECT t.id, t.title FROM note_links l JOIN notes t ON t.id = l.target_note_id WHERE l.source_note_id = ?');
+        $outStmt->execute([$note['id']]);
+        $backStmt = db()->prepare('SELECT s.id, s.title FROM note_links l JOIN notes s ON s.id = l.source_note_id WHERE l.target_note_id = ?');
+        $backStmt->execute([$note['id']]);
+
+        json_response([
+            'id' => $note['id'], 'title' => $note['title'], 'content' => $note['content'],
+            'updatedAt' => $note['updated_at'], 'createdAt' => $note['created_at'],
+            'outgoingLinks' => $outStmt->fetchAll(PDO::FETCH_ASSOC),
+            'backlinks' => $backStmt->fetchAll(PDO::FETCH_ASSOC),
+        ]);
+        break;
+
+    case 'notes.update':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'notes');
+        require_fields($input, ['id', 'title']);
+        db()->prepare('UPDATE notes SET title = ?, content = ?, updated_by_id = ?, updated_at = datetime("now") WHERE id = ? AND company_id = ?')
+            ->execute([$input['title'], $input['content'] ?? '', $user['id'], $input['id'], $ctx['companyId']]);
+        sync_note_links($ctx['companyId'], $input['id'], $input['content'] ?? '', $user['id']);
+        log_audit($ctx['companyId'], $user['id'], null, 'Nota modificata: "' . $input['title'] . '"');
+        json_response(['ok' => true]);
+        break;
+
+    case 'notes.delete':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'notes');
+        require_fields($input, ['id']);
+        $nameStmt = db()->prepare('SELECT title FROM notes WHERE id = ? AND company_id = ?');
+        $nameStmt->execute([$input['id'], $ctx['companyId']]);
+        $noteRow = $nameStmt->fetch(PDO::FETCH_ASSOC);
+        db()->prepare('DELETE FROM note_links WHERE source_note_id = ? OR target_note_id = ?')->execute([$input['id'], $input['id']]);
+        db()->prepare('DELETE FROM notes WHERE id = ? AND company_id = ?')->execute([$input['id'], $ctx['companyId']]);
+        log_audit($ctx['companyId'], $user['id'], null, 'Nota eliminata: "' . ($noteRow['title'] ?? $input['id']) . '"');
+        json_response(['ok' => true]);
+        break;
+
+    case 'notes.graph':
+        $ctx = require_company($user, $input['companyId'] ?? null, 'notes');
+        $notesStmt = db()->prepare('SELECT id, title FROM notes WHERE company_id = ?');
+        $notesStmt->execute([$ctx['companyId']]);
+        $linksStmt = db()->prepare('SELECT source_note_id, target_note_id FROM note_links WHERE company_id = ?');
+        $linksStmt->execute([$ctx['companyId']]);
+        json_response([
+            'nodes' => $notesStmt->fetchAll(PDO::FETCH_ASSOC),
+            'edges' => array_map(fn($l) => ['source' => $l['source_note_id'], 'target' => $l['target_note_id']], $linksStmt->fetchAll(PDO::FETCH_ASSOC)),
         ]);
         break;
 

@@ -22,6 +22,7 @@ $workflowAppId = upsert_application($pdo, 'workflow', 'Workflow Management', 'Ge
 upsert_application($pdo, 'timesheet', 'Timesheet Dipendenti', 'Risorse Umane', true);
 $ticketAppId = upsert_application($pdo, 'ticket', 'Gestione Ticket', 'Gestionale', true);
 upsert_application($pdo, 'crm', 'CRM', 'Gestionale', true);
+$notesAppId = upsert_application($pdo, 'notes', 'Note', 'Produttivita\'', true);
 
 // ---- Azienda demo ----
 $stmt = $pdo->prepare('SELECT id FROM companies WHERE slug = ?');
@@ -91,6 +92,13 @@ foreach ($usersDef as [$email, $fullName, $roleKey]) {
     if (!$stmt->fetch()) {
         $pdo->prepare('INSERT INTO user_company_applications (id, user_company_id, application_id, role_id) VALUES (?, ?, ?, ?)')
             ->execute([new_id('uca'), $ucId, $ticketAppId, $roleIds[$roleKey]]);
+    }
+
+    $stmt = $pdo->prepare('SELECT id FROM user_company_applications WHERE user_company_id = ? AND application_id = ?');
+    $stmt->execute([$ucId, $notesAppId]);
+    if (!$stmt->fetch()) {
+        $pdo->prepare('INSERT INTO user_company_applications (id, user_company_id, application_id, role_id) VALUES (?, ?, ?, ?)')
+            ->execute([new_id('uca'), $ucId, $notesAppId, $roleIds[$roleKey]]);
     }
 }
 

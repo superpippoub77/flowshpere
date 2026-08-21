@@ -227,6 +227,32 @@ function run_migrations(PDO $pdo): void
     if (!$tableExists('settings')) {
         $pdo->exec("CREATE TABLE settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)");
     }
+
+    if (!$tableExists('notes')) {
+        $pdo->exec("
+            CREATE TABLE notes (
+                id TEXT PRIMARY KEY,
+                company_id TEXT NOT NULL REFERENCES companies(id),
+                title TEXT NOT NULL,
+                content TEXT,
+                created_by_id TEXT REFERENCES users(id),
+                updated_by_id TEXT REFERENCES users(id),
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        ");
+    }
+
+    if (!$tableExists('note_links')) {
+        $pdo->exec("
+            CREATE TABLE note_links (
+                id TEXT PRIMARY KEY,
+                company_id TEXT NOT NULL REFERENCES companies(id),
+                source_note_id TEXT NOT NULL REFERENCES notes(id),
+                target_note_id TEXT NOT NULL REFERENCES notes(id)
+            )
+        ");
+    }
 }
 
 function new_id(string $prefix = ''): string
@@ -430,6 +456,24 @@ function create_schema(PDO $pdo): void
         CREATE TABLE settings (
             setting_key TEXT PRIMARY KEY,
             setting_value TEXT
+        );
+
+        CREATE TABLE notes (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id),
+            title TEXT NOT NULL,
+            content TEXT,
+            created_by_id TEXT REFERENCES users(id),
+            updated_by_id TEXT REFERENCES users(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE note_links (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id),
+            source_note_id TEXT NOT NULL REFERENCES notes(id),
+            target_note_id TEXT NOT NULL REFERENCES notes(id)
         );
 
         CREATE TABLE ai_decisions (

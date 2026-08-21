@@ -29,6 +29,8 @@ import VpnKeyIcon from "@mui/icons-material/VpnKeyOutlined";
 import ScheduleIcon from "@mui/icons-material/ScheduleOutlined";
 import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumberOutlined";
 import GroupsIcon from "@mui/icons-material/GroupsOutlined";
+import NotesIcon from "@mui/icons-material/DescriptionOutlined";
+import HubIcon from "@mui/icons-material/HubOutlined";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettingsOutlined";
 import BusinessIcon from "@mui/icons-material/BusinessOutlined";
 import PeopleIcon from "@mui/icons-material/PeopleOutlined";
@@ -68,6 +70,10 @@ const APP_OPERATIONS: Record<string, { label: string; to: string; icon: JSX.Elem
     { label: "Token API", to: "/workflow/api-tokens", icon: <VpnKeyIcon fontSize="small" />, adminOnly: true },
   ],
   crm: [{ label: "Presto disponibile", to: "#", icon: <GroupsIcon fontSize="small" /> }],
+  notes: [
+    { label: "Le tue note", to: "/notes/list", icon: <NotesIcon fontSize="small" /> },
+    { label: "Vista a grafo", to: "/notes/graph", icon: <HubIcon fontSize="small" /> },
+  ],
 };
 
 const APP_ICONS: Record<string, JSX.Element> = {
@@ -75,6 +81,7 @@ const APP_ICONS: Record<string, JSX.Element> = {
   timesheet: <ScheduleIcon />,
   ticket: <ConfirmationNumberIcon />,
   crm: <GroupsIcon />,
+  notes: <NotesIcon />,
 };
 
 const APP_LABELS: Record<string, string> = {
@@ -82,6 +89,7 @@ const APP_LABELS: Record<string, string> = {
   timesheet: "Timesheet",
   ticket: "Ticket",
   crm: "CRM",
+  notes: "Note",
 };
 
 const ADMIN_ITEMS = [

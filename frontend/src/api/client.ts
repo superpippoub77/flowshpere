@@ -83,6 +83,11 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/ticket-categories$/, action: "__ticket_categories_list_or_create__" },
   { pattern: /^\/ticket-categories\/([^/]+)$/, action: "ticketCategories.update", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/ticket-categories\/([^/]+)\/delete$/, action: "ticketCategories.delete", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/notes\/table$/, action: "notes.listPaginated" },
+  { pattern: /^\/notes$/, action: "notes.create" },
+  { pattern: /^\/notes\/graph$/, action: "notes.graph" },
+  { pattern: /^\/notes\/([^/]+)$/, action: "__notes_get_or_update__", extract: (m) => ({ id: m[1] }) },
+  { pattern: /^\/notes\/([^/]+)\/delete$/, action: "notes.delete", extract: (m) => ({ id: m[1] }) },
 
   { pattern: /^\/admin\/users$/, action: "__admin_users_list_or_create__" },
   { pattern: /^\/admin\/users\/table$/, action: "admin.users.listPaginated" },
@@ -114,6 +119,7 @@ function resolveAction(method: "get" | "post" | "put", url: string): string {
     if (m.action === "__api_tokens_list_or_create__") return method === "get" ? "apiTokens.list" : "apiTokens.create";
     if (m.action === "__tickets_list_or_create__") return method === "get" ? "tickets.list" : "tickets.create";
     if (m.action === "__ticket_categories_list_or_create__") return method === "get" ? "ticketCategories.list" : "ticketCategories.create";
+    if (m.action === "__notes_get_or_update__") return method === "get" ? "notes.get" : "notes.update";
     if (m.action === "__mail_config_get_or_update__") return method === "get" ? "settings.getMailConfig" : "settings.updateMailConfig";
     if (m.action === "__oauth_config_get_or_update__") return method === "get" ? "settings.getOAuthConfig" : "settings.updateOAuthConfig";
     return m.action;

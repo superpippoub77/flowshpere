@@ -1,4 +1,4 @@
-const KNOWN_APPS = ["workflow", "ticket", "timesheet", "crm"];
+const KNOWN_APPS = ["workflow", "ticket", "timesheet", "crm", "notes"];
 
 export function appKeyFromPath(pathname: string): string {
   const seg = pathname.replace(/^\/+/, "").split("/")[0];

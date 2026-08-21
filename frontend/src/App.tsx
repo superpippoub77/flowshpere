@@ -8,6 +8,9 @@ import { WorkflowDesignerPage } from "./pages/workflow/WorkflowDesignerPage";
 import { InstanceListPage } from "./pages/workflow/InstanceListPage";
 import { ApiTokensPage } from "./pages/workflow/ApiTokensPage";
 import { TicketListPage } from "./pages/ticket/TicketListPage";
+import { NotesListPage } from "./pages/notes/NotesListPage";
+import { NoteEditorPage } from "./pages/notes/NoteEditorPage";
+import { NotesGraphPage } from "./pages/notes/NotesGraphPage";
 import { TicketCategoriesPage } from "./pages/ticket/TicketCategoriesPage";
 import { PublicOrderPage } from "./pages/public/PublicOrderPage";
 import { PublicTicketPage } from "./pages/public/PublicTicketPage";
@@ -90,6 +93,9 @@ export function App() {
         />
 
         <Route path="ticket/tickets" element={<TicketListPage />} />
+        <Route path="notes/list" element={<NotesListPage />} />
+        <Route path="notes/graph" element={<NotesGraphPage />} />
+        <Route path="notes/:id" element={<NoteEditorPage />} />
         <Route
           path="ticket/categories"
           element={
