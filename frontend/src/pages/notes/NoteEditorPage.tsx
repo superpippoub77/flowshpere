@@ -2,17 +2,10 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Box, Stack, Typography, TextField, Button, Paper, Divider, Chip, CircularProgress } from "@mui/material";
-import ReactMarkdown from "react-markdown";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { api } from "../../api/client";
 import { useStatusStore } from "../../store/statusStore";
-
-// Trasforma i [[Titolo]] in link markdown riconoscibili (schema "wikilink:"),
-// cosi' il renderer sottostante puo' intercettarli e aprirli senza uscire
-// dall'app (esattamente come i link interni di Obsidian).
-function toRenderableMarkdown(content: string): string {
-  return content.replace(/\[\[([^\]]+)\]\]/g, (_match, title) => `[${title}](wikilink:${encodeURIComponent(title)})`);
-}
+import { RichTextEditor } from "../workflow/RichTextEditor";
 
 export function NoteEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,15 +20,6 @@ export function NoteEditorPage() {
     queryKey: ["note", id],
     queryFn: async () => (await api.get(`/notes/${id}`)).data,
     enabled: !!id,
-  });
-
-  const { data: graph } = useQuery({
-    queryKey: ["notes-graph"],
-    queryFn: async () => (await api.get("/notes/graph")).data,
-  });
-  const titleToId: Record<string, string> = {};
-  (graph?.nodes ?? []).forEach((n: any) => {
-    titleToId[n.title.toLowerCase()] = n.id;
   });
 
   useEffect(() => {
@@ -59,12 +43,6 @@ export function NoteEditorPage() {
     onError: () => setStatus("error", "Errore nel salvataggio della nota"),
   });
 
-  function handleWikilinkClick(rawHref: string) {
-    const title = decodeURIComponent(rawHref.replace(/^wikilink:/, ""));
-    const targetId = titleToId[title.toLowerCase()];
-    if (targetId) navigate(`/notes/${targetId}`);
-  }
-
   if (!note) {
     return (
       <Box sx={{ p: 3, display: "grid", placeItems: "center", height: "100%" }}>
@@ -74,7 +52,7 @@ export function NoteEditorPage() {
   }
 
   return (
-    <Box sx={{ p: 3, height: "100%", display: "flex", flexDirection: "column" }}>
+    <Box sx={{ p: 3, height: "100%", display: "flex", flexDirection: "column", overflow: "auto" }}>
       <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2 }}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/notes/list")}>
           Tutte le note
@@ -99,60 +77,32 @@ export function NoteEditorPage() {
         sx={{ mb: 2 }}
       />
 
-      <Stack direction="row" spacing={2} sx={{ flex: 1, minHeight: 0 }}>
-        <Paper sx={{ flex: 1, p: 2, display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <Typography variant="overline" color="text.secondary" sx={{ mb: 1 }}>
-            Markdown — usa [[Titolo]] per collegare un'altra nota
-          </Typography>
-          <TextField
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            multiline
-            fullWidth
-            variant="outlined"
-            placeholder="Scrivi qui... **grassetto**, *corsivo*, [[Altra nota]], [link](https://...)"
-            sx={{ flex: 1, "& .MuiInputBase-root": { height: "100%", alignItems: "flex-start" }, "& textarea": { height: "100% !important", overflow: "auto !important" } }}
-          />
-        </Paper>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+        Scrivi [[Titolo]] per collegare un'altra nota — se non esiste ancora, viene creata da sola al salvataggio. I
+        collegamenti compaiono qui sotto dopo aver salvato.
+      </Typography>
 
-        <Paper sx={{ flex: 1, p: 2, overflow: "auto", minHeight: 0 }}>
-          <Typography variant="overline" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-            Anteprima
+      <Paper sx={{ p: 2 }}>
+        <RichTextEditor key={`note-${id}`} value={content} onChange={setContent} placeholder="Scrivi qui il contenuto della nota..." />
+      </Paper>
+
+      {(note.outgoingLinks?.length > 0 || note.backlinks?.length > 0) && <Divider sx={{ my: 2 }} />}
+
+      {note.outgoingLinks?.length > 0 && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="overline" color="text.secondary">
+            Collegamenti in uscita ({note.outgoingLinks.length})
           </Typography>
-          <Box
-            sx={{
-              "& p": { m: 0, mb: 1 },
-              "& ul, & ol": { mt: 0, mb: 1 },
-              "& a[href^='wikilink:']": { color: "secondary.main", fontWeight: 600, textDecoration: "none", borderBottom: "1px dashed", cursor: "pointer" },
-            }}
-          >
-            <ReactMarkdown
-              components={{
-                a: ({ href, children }) => {
-                  if (href?.startsWith("wikilink:")) {
-                    return (
-                      <a href="#" onClick={(e) => { e.preventDefault(); handleWikilinkClick(href); }}>
-                        {children}
-                      </a>
-                    );
-                  }
-                  return (
-                    <a href={href} target="_blank" rel="noreferrer">
-                      {children}
-                    </a>
-                  );
-                },
-              }}
-            >
-              {toRenderableMarkdown(content)}
-            </ReactMarkdown>
-          </Box>
-        </Paper>
-      </Stack>
+          <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
+            {note.outgoingLinks.map((l: any) => (
+              <Chip key={l.id} label={l.title} onClick={() => navigate(`/notes/${l.id}`)} sx={{ cursor: "pointer" }} />
+            ))}
+          </Stack>
+        </Box>
+      )}
 
       {note.backlinks?.length > 0 && (
-        <Box sx={{ mt: 2 }}>
-          <Divider sx={{ mb: 1.5 }} />
+        <Box>
           <Typography variant="overline" color="text.secondary">
             Collegamenti in entrata ({note.backlinks.length})
           </Typography>
