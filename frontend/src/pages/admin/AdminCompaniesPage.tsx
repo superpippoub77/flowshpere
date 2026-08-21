@@ -18,6 +18,7 @@ import EditIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
+import { GridHeaderFilter } from "../../components/GridHeaderFilter";
 
 export function AdminCompaniesPage() {
   const queryClient = useQueryClient();
@@ -77,8 +78,13 @@ export function AdminCompaniesPage() {
 
   const columns: GridColDef[] = useMemo(
     () => [
-      { field: "name", headerName: "Nome", flex: 1, minWidth: 200 },
-      { field: "slug", headerName: "Codice", flex: 0.7, minWidth: 140 },
+      {
+        field: "name",
+        renderHeader: () => <GridHeaderFilter field="name" label="Nome" filterModel={filterModel} setFilterModel={setFilterModel} />,
+        flex: 1,
+        minWidth: 220,
+      },
+      { field: "slug", headerName: "Codice", flex: 0.7, minWidth: 140, filterable: false },
       {
         field: "actions_",
         headerName: "Azioni",
@@ -106,7 +112,7 @@ export function AdminCompaniesPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [filterModel, setFilterModel]
   );
 
   return (
@@ -128,6 +134,7 @@ export function AdminCompaniesPage() {
           rows={companies}
           columns={columns}
           loading={isFetching}
+          columnHeaderHeight={64}
           paginationMode="server"
           filterMode="server"
           rowCount={companiesPage?.total ?? 0}

@@ -24,6 +24,7 @@ import { api, getAvatarUrl } from "../../api/client";
 import { AvatarPicker } from "../../components/AvatarPicker";
 import { PasswordField } from "../../components/PasswordField";
 import { ClearableTextField } from "../../components/ClearableTextField";
+import { GridHeaderFilter } from "../../components/GridHeaderFilter";
 
 const TYPE_LABEL: Record<string, { label: string; color: any }> = {
   SUPERADMIN: { label: "Super Amministratore", color: "error" },
@@ -108,8 +109,18 @@ export function AdminUsersPage() {
           </Avatar>
         ),
       },
-      { field: "fullName", headerName: "Nome", flex: 0.9, minWidth: 160 },
-      { field: "email", headerName: "Email", flex: 1, minWidth: 180 },
+      {
+        field: "fullName",
+        renderHeader: () => <GridHeaderFilter field="fullName" label="Nome" filterModel={filterModel} setFilterModel={setFilterModel} />,
+        flex: 0.9,
+        minWidth: 180,
+      },
+      {
+        field: "email",
+        renderHeader: () => <GridHeaderFilter field="email" label="Email" filterModel={filterModel} setFilterModel={setFilterModel} />,
+        flex: 1,
+        minWidth: 200,
+      },
       {
         field: "jobTitle",
         headerName: "Telefono / Ruolo",
@@ -127,10 +138,17 @@ export function AdminUsersPage() {
       },
       {
         field: "userType",
-        headerName: "Tipo",
-        width: 190,
-        type: "singleSelect",
-        valueOptions: Object.entries(TYPE_LABEL).map(([value, v]) => ({ value, label: v.label })),
+        renderHeader: () => (
+          <GridHeaderFilter
+            field="userType"
+            label="Tipo"
+            filterModel={filterModel}
+            setFilterModel={setFilterModel}
+            operator="equals"
+            options={Object.entries(TYPE_LABEL).map(([value, v]) => ({ value, label: v.label }))}
+          />
+        ),
+        width: 210,
         renderCell: (params) => <Chip size="small" label={TYPE_LABEL[params.value as string]?.label ?? params.value} color={TYPE_LABEL[params.value as string]?.color} />,
       },
       {
@@ -160,7 +178,7 @@ export function AdminUsersPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [filterModel, setFilterModel]
   );
 
   return (
@@ -183,6 +201,7 @@ export function AdminUsersPage() {
           columns={columns}
           loading={isFetching}
           getRowHeight={() => "auto"}
+          columnHeaderHeight={64}
           paginationMode="server"
           filterMode="server"
           rowCount={usersPage?.total ?? 0}

@@ -4,6 +4,7 @@ import { Box, Stack, Typography, Paper, TextField, MenuItem, Grid } from "@mui/m
 import { DataGrid, GridColDef, GridToolbar, GridFilterModel } from "@mui/x-data-grid";
 import dayjs from "dayjs";
 import { api } from "../../api/client";
+import { GridHeaderFilter } from "../../components/GridHeaderFilter";
 
 export function AuditLogPage() {
   const [page, setPage] = useState(0);
@@ -27,12 +28,29 @@ export function AuditLogPage() {
   const columns: GridColDef[] = useMemo(
     () => [
       { field: "createdAt", headerName: "Quando", width: 170, filterable: false, valueFormatter: (p) => dayjs(p.value as string).format("DD/MM/YYYY HH:mm:ss") },
-      { field: "action", headerName: "Azione", flex: 1.4, minWidth: 260 },
-      { field: "companyName", headerName: "Azienda", flex: 0.7, minWidth: 140, valueGetter: (p) => p.row.companyName ?? "Globale" },
-      { field: "userName", headerName: "Utente", flex: 0.7, minWidth: 140, valueGetter: (p) => p.row.userName ?? "Sistema" },
+      {
+        field: "action",
+        renderHeader: () => <GridHeaderFilter field="action" label="Azione" filterModel={filterModel} setFilterModel={setFilterModel} />,
+        flex: 1.4,
+        minWidth: 280,
+      },
+      {
+        field: "companyName",
+        renderHeader: () => <GridHeaderFilter field="companyName" label="Azienda" filterModel={filterModel} setFilterModel={setFilterModel} />,
+        flex: 0.7,
+        minWidth: 160,
+        valueGetter: (p) => p.row.companyName ?? "Globale",
+      },
+      {
+        field: "userName",
+        renderHeader: () => <GridHeaderFilter field="userName" label="Utente" filterModel={filterModel} setFilterModel={setFilterModel} />,
+        flex: 0.7,
+        minWidth: 160,
+        valueGetter: (p) => p.row.userName ?? "Sistema",
+      },
       { field: "ip", headerName: "IP", width: 130, filterable: false, valueGetter: (p) => p.row.ip ?? "—" },
     ],
-    []
+    [filterModel, setFilterModel]
   );
 
   return (
@@ -105,6 +123,7 @@ export function AuditLogPage() {
           rows={items}
           columns={columns}
           loading={isFetching}
+          columnHeaderHeight={64}
           paginationMode="server"
           filterMode="server"
           rowCount={data?.total ?? 0}

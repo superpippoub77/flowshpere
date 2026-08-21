@@ -85,7 +85,7 @@ export function StepDots({
   badges?: { hasComment: boolean; hasAttachment: boolean }[];
 }) {
   return (
-    <Stack direction="row" alignItems="center" sx={{ overflowX: "auto", py: compact ? 0 : 1 }}>
+    <Stack direction="row" alignItems="center" sx={{ overflow: "visible", flexShrink: 0, width: "max-content", py: compact ? 0 : 1 }}>
       {sequence.map((node, idx) => (
         <Box
           key={node.id}

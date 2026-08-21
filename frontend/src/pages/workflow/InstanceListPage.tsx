@@ -27,6 +27,7 @@ import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
 import { useI18n } from "../../i18n";
 import { CompanySelector } from "../../components/CompanySelector";
+import { GridHeaderFilter } from "../../components/GridHeaderFilter";
 import { StepDots, computeMainSequence, computeStepStatuses } from "./StepDots";
 import { InstanceDrawer } from "./InstanceDrawer";
 
@@ -138,23 +139,52 @@ export function InstanceListPage() {
   const publishedWorkflows = (workflows ?? []).filter((w: any) => w.status === "PUBLISHED");
   const items = data?.items ?? [];
 
+  const progressColumnWidth = useMemo(() => {
+    const DOT_SIZE = 34;
+    const CONNECTOR_MIN = 16;
+    const CELL_PADDING = 32;
+    let maxSteps = 3;
+    for (const item of items) {
+      try {
+        const nodes = JSON.parse(item.nodesJson);
+        const edges = JSON.parse(item.edgesJson);
+        const len = computeMainSequence(nodes, edges).length;
+        if (len > maxSteps) maxSteps = len;
+      } catch {
+        // riga senza dati sufficienti: ignorata nel calcolo
+      }
+    }
+    return maxSteps * DOT_SIZE + (maxSteps - 1) * CONNECTOR_MIN + CELL_PADDING;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
   const columns: GridColDef[] = useMemo(
     () => [
-      { field: "code", headerName: t("code"), width: 150 },
+      {
+        field: "code",
+        renderHeader: () => <GridHeaderFilter field="code" label={t("code")} filterModel={filterModel} setFilterModel={setFilterModel} />,
+        width: 160,
+      },
       { field: "workflowName", headerName: "Workflow", flex: 0.8, minWidth: 160, sortable: false, filterable: false, valueGetter: (p) => p.row.workflow?.name },
       {
         field: "status",
-        headerName: "Stato",
-        width: 140,
-        type: "singleSelect",
-        valueOptions: STATUS_OPTIONS,
+        renderHeader: () => (
+          <GridHeaderFilter
+            field="status"
+            label="Stato"
+            filterModel={filterModel}
+            setFilterModel={setFilterModel}
+            operator="equals"
+            options={STATUS_OPTIONS.map((s) => ({ value: s, label: s }))}
+          />
+        ),
+        width: 160,
         renderCell: (params) => <Chip size="small" label={params.value} color={STATUS_COLOR[params.value as string]} />,
       },
       {
         field: "progress",
         headerName: t("progress"),
-        flex: 1,
-        minWidth: 220,
+        width: progressColumnWidth,
         sortable: false,
         filterable: false,
         renderCell: (params) => (
@@ -207,7 +237,7 @@ export function InstanceListPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [companyUsers, t]
+    [companyUsers, t, progressColumnWidth, filterModel, setFilterModel]
   );
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
@@ -317,6 +347,7 @@ export function InstanceListPage() {
           columns={columns}
           loading={isFetching}
           getRowHeight={() => "auto"}
+          columnHeaderHeight={64}
           paginationMode="server"
           filterMode="server"
           rowCount={data?.total ?? 0}

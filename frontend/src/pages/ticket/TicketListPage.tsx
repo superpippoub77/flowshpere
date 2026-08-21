@@ -21,6 +21,7 @@ import dayjs from "dayjs";
 import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
 import { CompanySelector } from "../../components/CompanySelector";
+import { GridHeaderFilter } from "../../components/GridHeaderFilter";
 import { TicketDrawer } from "./TicketDrawer";
 
 const STATUS_LABEL: Record<string, { label: string; color: any }> = {
@@ -77,23 +78,46 @@ export function TicketListPage() {
 
   const columns: GridColDef[] = useMemo(
     () => [
-      { field: "code", headerName: "N. ticket", width: 130 },
-      { field: "subject", headerName: "Oggetto", flex: 1, minWidth: 200 },
+      {
+        field: "code",
+        renderHeader: () => <GridHeaderFilter field="code" label="N. ticket" filterModel={filterModel} setFilterModel={setFilterModel} />,
+        width: 160,
+      },
+      {
+        field: "subject",
+        renderHeader: () => <GridHeaderFilter field="subject" label="Oggetto" filterModel={filterModel} setFilterModel={setFilterModel} />,
+        flex: 1,
+        minWidth: 220,
+      },
       { field: "categoryName", headerName: "Ramo", width: 140, filterable: false, valueGetter: (p) => p.row.categoryName ?? "—" },
       {
         field: "priority",
-        headerName: "Priorità",
-        width: 130,
-        type: "singleSelect",
-        valueOptions: Object.entries(PRIORITY_LABEL).map(([value, v]) => ({ value, label: v.label })),
+        renderHeader: () => (
+          <GridHeaderFilter
+            field="priority"
+            label="Priorità"
+            filterModel={filterModel}
+            setFilterModel={setFilterModel}
+            operator="equals"
+            options={Object.entries(PRIORITY_LABEL).map(([value, v]) => ({ value, label: v.label }))}
+          />
+        ),
+        width: 150,
         renderCell: (params) => <Chip size="small" label={PRIORITY_LABEL[params.value as string]?.label ?? params.value} color={PRIORITY_LABEL[params.value as string]?.color} />,
       },
       {
         field: "status",
-        headerName: "Stato",
-        width: 150,
-        type: "singleSelect",
-        valueOptions: Object.entries(STATUS_LABEL).map(([value, v]) => ({ value, label: v.label })),
+        renderHeader: () => (
+          <GridHeaderFilter
+            field="status"
+            label="Stato"
+            filterModel={filterModel}
+            setFilterModel={setFilterModel}
+            operator="equals"
+            options={Object.entries(STATUS_LABEL).map(([value, v]) => ({ value, label: v.label }))}
+          />
+        ),
+        width: 170,
         renderCell: (params) => <Chip size="small" label={STATUS_LABEL[params.value as string]?.label ?? params.value} color={STATUS_LABEL[params.value as string]?.color} />,
       },
       {
@@ -112,7 +136,7 @@ export function TicketListPage() {
         valueFormatter: (p) => dayjs(p.value as string).format("DD/MM/YYYY HH:mm"),
       },
     ],
-    []
+    [filterModel, setFilterModel]
   );
 
   return (
@@ -159,6 +183,7 @@ export function TicketListPage() {
           columns={columns}
           loading={isFetching}
           getRowHeight={() => "auto"}
+          columnHeaderHeight={64}
           paginationMode="server"
           filterMode="server"
           rowCount={data?.total ?? 0}

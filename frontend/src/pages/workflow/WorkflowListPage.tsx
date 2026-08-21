@@ -25,6 +25,7 @@ import { useAuthStore } from "../../store/authStore";
 import { ClearableTextField } from "../../components/ClearableTextField";
 import { useI18n } from "../../i18n";
 import { CompanySelector } from "../../components/CompanySelector";
+import { GridHeaderFilter } from "../../components/GridHeaderFilter";
 
 const STATUS_LABEL: Record<string, { label: string; color: any }> = {
   DRAFT: { label: "Bozza", color: "default" },
@@ -90,7 +91,7 @@ export function WorkflowListPage() {
     () => [
       {
         field: "name",
-        headerName: t("name"),
+        renderHeader: () => <GridHeaderFilter field="name" label={t("name")} filterModel={filterModel} setFilterModel={setFilterModel} />,
         flex: 1.2,
         minWidth: 200,
         renderCell: (params) => (
@@ -109,6 +110,7 @@ export function WorkflowListPage() {
         headerName: "Azienda",
         flex: 0.8,
         minWidth: 150,
+        filterable: false,
         renderCell: (params) => (
           <Stack direction="row" alignItems="center" spacing={0.5}>
             <Typography variant="body2">{params.row.companyName ?? "—"}</Typography>
@@ -128,10 +130,17 @@ export function WorkflowListPage() {
       },
       {
         field: "status",
-        headerName: t("status"),
-        width: 140,
-        type: "singleSelect",
-        valueOptions: Object.entries(STATUS_LABEL).map(([value, v]) => ({ value, label: v.label })),
+        renderHeader: () => (
+          <GridHeaderFilter
+            field="status"
+            label={t("status")}
+            filterModel={filterModel}
+            setFilterModel={setFilterModel}
+            operator="equals"
+            options={Object.entries(STATUS_LABEL).map(([value, v]) => ({ value, label: v.label }))}
+          />
+        ),
+        width: 160,
         renderCell: (params) => <Chip size="small" label={STATUS_LABEL[params.value as string]?.label ?? params.value} color={STATUS_LABEL[params.value as string]?.color} />,
       },
       { field: "latestVersion", headerName: "Versione", width: 90, filterable: false, valueFormatter: (p) => `v${p.value ?? 1}` },
@@ -157,7 +166,7 @@ export function WorkflowListPage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, navigate]
+    [user, navigate, filterModel, setFilterModel]
   );
 
   return (
@@ -183,6 +192,7 @@ export function WorkflowListPage() {
           columns={columns}
           loading={isFetching}
           getRowHeight={() => "auto"}
+          columnHeaderHeight={64}
           paginationMode="server"
           filterMode="server"
           rowCount={workflowsPage?.total ?? 0}
