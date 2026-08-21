@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -79,6 +80,25 @@ export function InstanceListPage() {
   const [drawerInstanceId, setDrawerInstanceId] = useState<string | null>(null);
   const [initialNodeId, setInitialNodeId] = useState<string | null>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Link diretto (es. da un'email di notifica): ?openInstance=...&openNode=...
+  // apre subito il passo giusto; solo ?openInstance=... apre la timeline.
+  useEffect(() => {
+    const openInstance = searchParams.get("openInstance");
+    if (!openInstance) return;
+    const openNode = searchParams.get("openNode");
+    setDrawerInstanceId(openInstance);
+    if (openNode) {
+      setInitialNodeId(openNode);
+      setDrawerVisible(false);
+    } else {
+      setInitialNodeId(null);
+      setDrawerVisible(true);
+    }
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [page, setPage] = useState(0);
   const [openClosed, setOpenClosed] = useState("open");

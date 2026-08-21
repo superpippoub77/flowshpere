@@ -45,6 +45,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopyOutlined";
 import Magnet from "@mui/icons-material/GridOnOutlined";
 import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
+import ReactMarkdown from "react-markdown";
 import { useStatusStore } from "../../store/statusStore";
 import { NODE_PALETTE, nodeTypes } from "./nodeTypes";
 
@@ -534,13 +535,30 @@ function DesignerInner() {
             />
 
             <ClearableTextField
-              label="Descrizione del passo (mostrata a chi deve eseguirlo)"
+              label="Descrizione del passo (mostrata a chi deve eseguirlo — supporta Markdown: **grassetto**, *corsivo*, elenchi, [link](url))"
               size="small"
               multiline
-              minRows={2}
+              minRows={3}
               value={selectedNode.data.config?.description ?? ""}
               onChange={(e) => updateSelected((d) => ({ ...d, config: { ...d.config, description: e.target.value } }))}
             />
+            {!!selectedNode.data.config?.description && (
+              <Box
+                sx={{
+                  p: 1.2,
+                  border: "1px dashed rgba(127,184,217,0.3)",
+                  borderRadius: 1,
+                  fontSize: 13,
+                  "& p": { m: 0 },
+                  "& p + p": { mt: 1 },
+                }}
+              >
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                  Anteprima
+                </Typography>
+                <ReactMarkdown linkTarget="_blank">{selectedNode.data.config.description}</ReactMarkdown>
+              </Box>
+            )}
 
             {["form", "upload", "approval", "ai"].includes(selectedNode.type ?? "") && (
               <>

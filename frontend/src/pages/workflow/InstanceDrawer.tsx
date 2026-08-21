@@ -32,6 +32,7 @@ import { computeMainSequence, FlowNode } from "./StepDots";
 import { RichTextEditor } from "./RichTextEditor";
 import { AttachmentDropzone } from "./AttachmentDropzone";
 import { CustomerAutocomplete } from "../../components/CustomerAutocomplete";
+import ReactMarkdown from "react-markdown";
 import { ClearableTextField } from "../../components/ClearableTextField";
 
 const STATUS_COLOR: Record<string, any> = {
@@ -280,8 +281,10 @@ export function InstanceDrawer({
               {readAllowed && (
                 <>
                   {dialogNode.node.data.config?.description && (
-                    <Alert severity="info" sx={{ mb: 2 }}>
-                      {dialogNode.node.data.config.description}
+                    <Alert severity="info" sx={{ mb: 2, "& .markdown-step-desc p": { m: 0 }, "& .markdown-step-desc p + p": { mt: 1 } }}>
+                      <Box className="markdown-step-desc" sx={{ fontSize: 14 }}>
+                        <ReactMarkdown linkTarget="_blank">{dialogNode.node.data.config.description}</ReactMarkdown>
+                      </Box>
                     </Alert>
                   )}
 

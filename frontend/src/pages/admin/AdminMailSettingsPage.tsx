@@ -13,6 +13,7 @@ export function AdminMailSettingsPage() {
   const [password, setPassword] = useState("");
   const [fromEmail, setFromEmail] = useState("");
   const [fromName, setFromName] = useState("");
+  const [appBaseUrl, setAppBaseUrl] = useState("");
   const [hasPassword, setHasPassword] = useState(false);
   const [testEmail, setTestEmail] = useState("");
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -30,6 +31,7 @@ export function AdminMailSettingsPage() {
     setUsername(data.username ?? "");
     setFromEmail(data.fromEmail ?? "");
     setFromName(data.fromName ?? "");
+    setAppBaseUrl(data.appBaseUrl ?? "");
     setHasPassword(!!data.hasPassword);
   }, [data]);
 
@@ -43,6 +45,7 @@ export function AdminMailSettingsPage() {
         password: password || undefined,
         fromEmail,
         fromName,
+        appBaseUrl,
       }),
     onSuccess: () => {
       if (password) setHasPassword(true);
@@ -88,6 +91,14 @@ export function AdminMailSettingsPage() {
           />
           <ClearableTextField label="Email mittente" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} fullWidth />
           <ClearableTextField label="Nome mittente" value={fromName} onChange={(e) => setFromName(e.target.value)} fullWidth />
+          <ClearableTextField
+            label="URL pubblico dell'applicazione"
+            placeholder="es. https://filippomorano.com/projects/flowshpere"
+            helperText="Usato per costruire il link diretto nelle email di notifica (passo approvato/rifiutato)"
+            value={appBaseUrl}
+            onChange={(e) => setAppBaseUrl(e.target.value)}
+            fullWidth
+          />
 
           <Button
             variant="contained"

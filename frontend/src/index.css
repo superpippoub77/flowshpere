@@ -199,9 +199,25 @@ code,
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(127, 184, 217, 0.35);
+  background: transparent;
   border-radius: 5px;
+  transition: background 0.2s ease;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+/* La barra resta invisibile finche' non ci si avvicina al bordo (hover sul
+   contenitore che scorre), invece di stare sempre visibile. */
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(127, 184, 217, 0.35);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(127, 184, 217, 0.55);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: rgba(127, 184, 217, 0.35) transparent;
 }

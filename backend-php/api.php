@@ -9,6 +9,7 @@ require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/engine.php';
 require_once __DIR__ . '/includes/settings.php';
 require_once __DIR__ . '/includes/mailer.php';
+require_once __DIR__ . '/includes/notifications.php';
 require_once __DIR__ . '/includes/tickets.php';
 
 start_session();
@@ -520,9 +521,13 @@ switch ($action) {
 
         if ($decision === 'approve') {
             advance_from($instance['id'], $task['node_id'], 'approve');
+            $eventLabel = 'Il passo precedente ("' . $task['node_label'] . '") e\' stato approvato da ' . $user['full_name'] . '.';
         } else {
             send_back($instance['id']);
+            $eventLabel = 'Il passo "' . $task['node_label'] . '" e\' stato rifiutato da ' . $user['full_name'] . ' ed e\' tornato indietro per una revisione.';
         }
+        $freshInstance = fetch_instance_row($instance['id'], $ctx['companyId']);
+        notify_current_node_responsible($ctx['companyId'], $freshInstance, $eventLabel);
         json_response(['ok' => true]);
         break;
 
@@ -1173,6 +1178,7 @@ switch ($action) {
             'host' => $config['host'] ?? '', 'port' => $config['port'] ?? 587,
             'encryption' => $config['encryption'] ?? 'tls', 'username' => $config['username'] ?? '',
             'hasPassword' => !empty($config['password']), 'fromEmail' => $config['fromEmail'] ?? '', 'fromName' => $config['fromName'] ?? '',
+            'appBaseUrl' => get_setting('app_base_url', ''),
         ]);
         break;
 
@@ -1188,6 +1194,7 @@ switch ($action) {
             'password' => !empty($input['password']) ? encrypt_data($input['password']) : ($existing['password'] ?? null),
         ];
         set_setting('mail_smtp', $config);
+        set_setting('app_base_url', rtrim($input['appBaseUrl'] ?? '', '/'));
         log_audit(null, $user['id'], null, 'Configurazione email SMTP aggiornata');
         json_response(['ok' => true]);
         break;
