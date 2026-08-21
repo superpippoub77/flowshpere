@@ -54,8 +54,20 @@ export function GridHeaderFilter({
   }
 
   return (
-    <Box sx={{ width: "100%", pt: 0.4, pb: 0.2 }}>
-      <Typography variant="caption" sx={{ fontWeight: 700, display: "block", lineHeight: 1.3, mb: 0.2 }}>
+    <Box sx={{ width: "100%", minWidth: 0, overflow: "hidden", pt: 0.4, pb: 0.2 }}>
+      <Typography
+        variant="caption"
+        title={label}
+        sx={{
+          fontWeight: 700,
+          display: "block",
+          lineHeight: 1.3,
+          mb: 0.2,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
         {label}
       </Typography>
       {options ? (

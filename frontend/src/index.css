@@ -221,3 +221,13 @@ code,
 *:hover {
   scrollbar-color: rgba(127, 184, 217, 0.35) transparent;
 }
+
+/* Le colonne con ricerca sempre visibile sotto l'intestazione non hanno
+   piu' bisogno del menu a tre puntini (era ridondante e rubava spazio
+   all'etichetta della colonna, facendola sembrare tagliata/sovrapposta). */
+.MuiDataGrid-menuIcon {
+  display: none !important;
+}
+.MuiDataGrid-columnHeaderTitleContainer {
+  padding-right: 4px !important;
+}
