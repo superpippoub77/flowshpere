@@ -161,6 +161,9 @@ switch ($action) {
         $params = [$ctx['companyId']];
         if (!empty($input['name'])) { $where[] = 'w.name LIKE ?'; $params[] = '%' . $input['name'] . '%'; }
         if (!empty($input['status'])) { $where[] = 'w.status = ?'; $params[] = $input['status']; }
+        [$fmWhere, $fmParams] = apply_datagrid_filters($input['filterModel'] ?? null, ['name' => 'w.name', 'status' => 'w.status']);
+        $where = array_merge($where, $fmWhere);
+        $params = array_merge($params, $fmParams);
         $whereSql = implode(' AND ', $where);
 
         $countStmt = db()->prepare("SELECT COUNT(*) as c FROM workflows w WHERE $whereSql");
@@ -342,6 +345,9 @@ switch ($action) {
         if (!empty($input['code'])) { $where[] = 'wi.code LIKE ?'; $params[] = '%' . $input['code'] . '%'; }
         if (!empty($input['dateFrom'])) { $where[] = 'date(wi.created_at) >= date(?)'; $params[] = $input['dateFrom']; }
         if (!empty($input['dateTo'])) { $where[] = 'date(wi.created_at) <= date(?)'; $params[] = $input['dateTo']; }
+        [$fmWhere, $fmParams] = apply_datagrid_filters($input['filterModel'] ?? null, ['code' => 'wi.code', 'status' => 'wi.status', 'workflowName' => 'w.name']);
+        $where = array_merge($where, $fmWhere);
+        $params = array_merge($params, $fmParams);
 
         $whereSql = implode(' AND ', $where);
 
@@ -743,6 +749,9 @@ switch ($action) {
         if (!empty($input['status'])) { $where[] = 't.status = ?'; $params[] = $input['status']; }
         if (!empty($input['priority'])) { $where[] = 't.priority = ?'; $params[] = $input['priority']; }
         if (!empty($input['code'])) { $where[] = 't.code LIKE ?'; $params[] = '%' . $input['code'] . '%'; }
+        [$fmWhere, $fmParams] = apply_datagrid_filters($input['filterModel'] ?? null, ['code' => 't.code', 'subject' => 't.subject', 'status' => 't.status', 'priority' => 't.priority']);
+        $where = array_merge($where, $fmWhere);
+        $params = array_merge($params, $fmParams);
         $whereSql = implode(' AND ', $where);
 
         $countStmt = db()->prepare("SELECT COUNT(*) as c FROM tickets t WHERE $whereSql");
@@ -891,6 +900,9 @@ switch ($action) {
         if (!empty($input['fullName'])) { $where[] = 'full_name LIKE ?'; $params[] = '%' . $input['fullName'] . '%'; }
         if (!empty($input['email'])) { $where[] = 'email LIKE ?'; $params[] = '%' . $input['email'] . '%'; }
         if (!empty($input['userType'])) { $where[] = 'user_type = ?'; $params[] = $input['userType']; }
+        [$fmWhere, $fmParams] = apply_datagrid_filters($input['filterModel'] ?? null, ['fullName' => 'full_name', 'email' => 'email', 'userType' => 'user_type', 'phone' => 'phone', 'jobTitle' => 'job_title']);
+        $where = array_merge($where, $fmWhere);
+        $params = array_merge($params, $fmParams);
         $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $countStmt = db()->prepare("SELECT COUNT(*) as c FROM users $whereSql");
@@ -1005,6 +1017,9 @@ switch ($action) {
         $where = [];
         $params = [];
         if (!empty($input['name'])) { $where[] = 'name LIKE ?'; $params[] = '%' . $input['name'] . '%'; }
+        [$fmWhere, $fmParams] = apply_datagrid_filters($input['filterModel'] ?? null, ['name' => 'name', 'slug' => 'slug']);
+        $where = array_merge($where, $fmWhere);
+        $params = array_merge($params, $fmParams);
         $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $countStmt = db()->prepare("SELECT COUNT(*) as c FROM companies $whereSql");
@@ -1237,9 +1252,17 @@ switch ($action) {
         if (!empty($input['query'])) { $where[] = 'l.action LIKE ?'; $params[] = '%' . $input['query'] . '%'; }
         if (!empty($input['dateFrom'])) { $where[] = 'date(l.created_at) >= date(?)'; $params[] = $input['dateFrom']; }
         if (!empty($input['dateTo'])) { $where[] = 'date(l.created_at) <= date(?)'; $params[] = $input['dateTo']; }
+        [$fmWhere, $fmParams] = apply_datagrid_filters($input['filterModel'] ?? null, ['action' => 'l.action', 'companyName' => 'c.name', 'userName' => 'u.full_name']);
+        $where = array_merge($where, $fmWhere);
+        $params = array_merge($params, $fmParams);
         $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
-        $countStmt = db()->prepare("SELECT COUNT(*) as c FROM audit_logs l $whereSql");
+        $countStmt = db()->prepare("
+            SELECT COUNT(*) as c FROM audit_logs l
+            LEFT JOIN companies c ON c.id = l.company_id
+            LEFT JOIN users u ON u.id = l.user_id
+            $whereSql
+        ");
         $countStmt->execute($params);
         $total = (int) $countStmt->fetch(PDO::FETCH_ASSOC)['c'];
 

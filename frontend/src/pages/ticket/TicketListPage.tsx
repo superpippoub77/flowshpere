@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -6,12 +6,6 @@ import {
   Typography,
   Button,
   Paper,
-  Table,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
   Chip,
   Dialog,
   DialogTitle,
@@ -19,16 +13,14 @@ import {
   DialogActions,
   TextField,
   MenuItem,
-  Pagination,
   CircularProgress,
-  TableSortLabel,
 } from "@mui/material";
+import { DataGrid, GridColDef, GridToolbar, GridFilterModel } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
 import dayjs from "dayjs";
 import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
 import { CompanySelector } from "../../components/CompanySelector";
-import { useSort } from "../../hooks/useSort";
 import { TicketDrawer } from "./TicketDrawer";
 
 const STATUS_LABEL: Record<string, { label: string; color: any }> = {
@@ -48,8 +40,9 @@ const PRIORITY_LABEL: Record<string, { label: string; color: any }> = {
 export function TicketListPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ code: "", categoryId: "", status: "", priority: "" });
+  const [page, setPage] = useState(0);
+  const [categoryFilterId, setCategoryFilterId] = useState("");
+  const [filterModel, setFilterModel] = useState<GridFilterModel>({ items: [] });
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
@@ -61,15 +54,13 @@ export function TicketListPage() {
     queryFn: async () => (await api.get("/ticket-categories")).data,
   });
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["tickets", filters, page],
-    queryFn: async () => (await api.get("/tickets", { ...filters, page })).data,
+  const { data, isFetching } = useQuery({
+    queryKey: ["tickets", categoryFilterId, filterModel, page],
+    queryFn: async () => (await api.get("/tickets", { categoryId: categoryFilterId, filterModel: JSON.stringify(filterModel), page: page + 1 })).data,
     refetchInterval: 8000,
   });
 
   const items = data?.items ?? [];
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
-  const sort = useSort(items);
 
   const createMutation = useMutation({
     mutationFn: async () => (await api.post("/tickets", { subject, description, categoryId: categoryId || undefined, priority })).data,
@@ -84,16 +75,45 @@ export function TicketListPage() {
     },
   });
 
-  function updateFilter(key: string, value: string) {
-    setFilters((f) => ({ ...f, [key]: value }));
-    setPage(1);
-  }
-
-  function clearFilters() {
-    setFilters({ code: "", categoryId: "", status: "", priority: "" });
-    setPage(1);
-  }
-  const hasActiveFilters = Object.values(filters).some((v) => v);
+  const columns: GridColDef[] = useMemo(
+    () => [
+      { field: "code", headerName: "N. ticket", width: 130 },
+      { field: "subject", headerName: "Oggetto", flex: 1, minWidth: 200 },
+      { field: "categoryName", headerName: "Ramo", width: 140, filterable: false, valueGetter: (p) => p.row.categoryName ?? "—" },
+      {
+        field: "priority",
+        headerName: "Priorità",
+        width: 130,
+        type: "singleSelect",
+        valueOptions: Object.entries(PRIORITY_LABEL).map(([value, v]) => ({ value, label: v.label })),
+        renderCell: (params) => <Chip size="small" label={PRIORITY_LABEL[params.value as string]?.label ?? params.value} color={PRIORITY_LABEL[params.value as string]?.color} />,
+      },
+      {
+        field: "status",
+        headerName: "Stato",
+        width: 150,
+        type: "singleSelect",
+        valueOptions: Object.entries(STATUS_LABEL).map(([value, v]) => ({ value, label: v.label })),
+        renderCell: (params) => <Chip size="small" label={STATUS_LABEL[params.value as string]?.label ?? params.value} color={STATUS_LABEL[params.value as string]?.color} />,
+      },
+      {
+        field: "assignedToName",
+        headerName: "Assegnato a",
+        flex: 0.7,
+        minWidth: 140,
+        filterable: false,
+        renderCell: (params) => params.value ?? <Typography variant="caption" color="text.secondary">Non assegnato</Typography>,
+      },
+      {
+        field: "updatedAt",
+        headerName: "Aggiornato",
+        width: 160,
+        filterable: false,
+        valueFormatter: (p) => dayjs(p.value as string).format("DD/MM/YYYY HH:mm"),
+      },
+    ],
+    []
+  );
 
   return (
     <Box sx={{ p: 3 }}>
@@ -112,127 +132,49 @@ export function TicketListPage() {
         </Stack>
       </Stack>
 
-      <Paper>
-        <TableContainer>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell sortDirection={sort.orderBy === "code" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "code"} direction={sort.orderDir} onClick={() => sort.requestSort("code")}>
-                  N. ticket
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sort.orderBy === "subject" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "subject"} direction={sort.orderDir} onClick={() => sort.requestSort("subject")}>
-                  Oggetto
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sort.orderBy === "categoryName" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "categoryName"} direction={sort.orderDir} onClick={() => sort.requestSort("categoryName")}>
-                  Ramo
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sort.orderBy === "priority" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "priority"} direction={sort.orderDir} onClick={() => sort.requestSort("priority")}>
-                  Priorità
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sort.orderBy === "status" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "status"} direction={sort.orderDir} onClick={() => sort.requestSort("status")}>
-                  Stato
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sort.orderBy === "assignedToName" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "assignedToName"} direction={sort.orderDir} onClick={() => sort.requestSort("assignedToName")}>
-                  Assegnato a
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sort.orderBy === "updatedAt" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "updatedAt"} direction={sort.orderDir} onClick={() => sort.requestSort("updatedAt")}>
-                  Aggiornato
-                </TableSortLabel>
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ py: 0.5 }}>
-                <ClearableTextField size="small" variant="standard" placeholder="Cerca..." value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} fullWidth />
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }} />
-              <TableCell sx={{ py: 0.5 }}>
-                <TextField select size="small" variant="standard" value={filters.categoryId} onChange={(e) => updateFilter("categoryId", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
-                  <MenuItem value="">Tutti</MenuItem>
-                  {(categories ?? []).map((c: any) => (
-                    <MenuItem key={c.id} value={c.id}>
-                      {c.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }}>
-                <TextField select size="small" variant="standard" value={filters.priority} onChange={(e) => updateFilter("priority", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
-                  <MenuItem value="">Tutte</MenuItem>
-                  {Object.entries(PRIORITY_LABEL).map(([k, v]) => (
-                    <MenuItem key={k} value={k}>
-                      {v.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }}>
-                <TextField select size="small" variant="standard" value={filters.status} onChange={(e) => updateFilter("status", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
-                  <MenuItem value="">Tutti</MenuItem>
-                  {Object.entries(STATUS_LABEL).map(([k, v]) => (
-                    <MenuItem key={k} value={k}>
-                      {v.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }} />
-              <TableCell sx={{ py: 0.5 }} align="right">
-                {hasActiveFilters && (
-                  <Button size="small" onClick={clearFilters}>
-                    Cancella filtri
-                  </Button>
-                )}
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sort.sorted.map((t: any) => (
-              <TableRow key={t.id} hover onClick={() => setDrawerId(t.id)} sx={{ cursor: "pointer" }}>
-                <TableCell className="mono">{t.code}</TableCell>
-                <TableCell>{t.subject}</TableCell>
-                <TableCell>{t.categoryName ?? "—"}</TableCell>
-                <TableCell>
-                  <Chip size="small" label={PRIORITY_LABEL[t.priority]?.label ?? t.priority} color={PRIORITY_LABEL[t.priority]?.color} />
-                </TableCell>
-                <TableCell>
-                  <Chip size="small" label={STATUS_LABEL[t.status]?.label ?? t.status} color={STATUS_LABEL[t.status]?.color} />
-                </TableCell>
-                <TableCell>{t.assignedToName ?? <Typography variant="caption" color="text.secondary">Non assegnato</Typography>}</TableCell>
-                <TableCell className="mono">{dayjs(t.updatedAt).format("DD/MM/YYYY HH:mm")}</TableCell>
-              </TableRow>
-            ))}
-            {!isLoading && items.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                    Nessun ticket trovato con questi filtri.
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      </Paper>
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+        <TextField
+          select
+          size="small"
+          label="Ramo"
+          value={categoryFilterId}
+          onChange={(e) => {
+            setPage(0);
+            setCategoryFilterId(e.target.value);
+          }}
+          sx={{ minWidth: 180 }}
+        >
+          <MenuItem value="">Tutti</MenuItem>
+          {(categories ?? []).map((c: any) => (
+            <MenuItem key={c.id} value={c.id}>
+              {c.name}
+            </MenuItem>
+          ))}
+        </TextField>
+      </Stack>
 
-      {totalPages > 1 && (
-        <Stack alignItems="center" sx={{ mt: 2 }}>
-          <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} />
-        </Stack>
-      )}
+      <Paper sx={{ height: 560, display: "flex", flexDirection: "column" }}>
+        <DataGrid
+          rows={items}
+          columns={columns}
+          loading={isFetching}
+          getRowHeight={() => "auto"}
+          paginationMode="server"
+          filterMode="server"
+          rowCount={data?.total ?? 0}
+          paginationModel={{ page, pageSize: 10 }}
+          onPaginationModelChange={(model) => setPage(model.page)}
+          filterModel={filterModel}
+          onFilterModelChange={setFilterModel}
+          pageSizeOptions={[10]}
+          disableRowSelectionOnClick
+          onRowClick={(params) => setDrawerId(params.row.id)}
+          slots={{ toolbar: GridToolbar }}
+          slotProps={{ toolbar: { showQuickFilter: false } }}
+          localeText={{ noRowsLabel: "Nessun ticket trovato con questi filtri." }}
+          sx={{ border: 0, "& .MuiDataGrid-row": { cursor: "pointer" } }}
+        />
+      </Paper>
 
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Nuovo ticket</DialogTitle>

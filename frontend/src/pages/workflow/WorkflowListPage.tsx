@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,12 +7,6 @@ import {
   Typography,
   Button,
   Paper,
-  Table,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
   Chip,
   Dialog,
   DialogTitle,
@@ -22,9 +16,8 @@ import {
   MenuItem,
   IconButton,
   CircularProgress,
-  TableSortLabel,
-  Pagination,
 } from "@mui/material";
+import { DataGrid, GridColDef, GridToolbar, GridFilterModel } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
 import { api } from "../../api/client";
@@ -32,7 +25,6 @@ import { useAuthStore } from "../../store/authStore";
 import { ClearableTextField } from "../../components/ClearableTextField";
 import { useI18n } from "../../i18n";
 import { CompanySelector } from "../../components/CompanySelector";
-import { useSort } from "../../hooks/useSort";
 
 const STATUS_LABEL: Record<string, { label: string; color: any }> = {
   DRAFT: { label: "Bozza", color: "default" },
@@ -55,27 +47,15 @@ export function WorkflowListPage() {
   const user = useAuthStore((s) => s.user);
   const [companyEditTarget, setCompanyEditTarget] = useState<{ id: string; companyId: string } | null>(null);
   const [newCompanyId, setNewCompanyId] = useState("");
-  const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ name: "", status: "" });
+  const [page, setPage] = useState(0);
+  const [filterModel, setFilterModel] = useState<GridFilterModel>({ items: [] });
 
-  function updateFilter(key: string, value: string) {
-    setFilters((f) => ({ ...f, [key]: value }));
-    setPage(1);
-  }
-  function clearFilters() {
-    setFilters({ name: "", status: "" });
-    setPage(1);
-  }
-  const hasActiveFilters = Object.values(filters).some((v) => v);
-
-  const { data: workflowsPage } = useQuery({
-    queryKey: ["workflows-table", filters, page],
-    queryFn: async () => (await api.get("/workflows/table", { ...filters, page })).data,
+  const { data: workflowsPage, isFetching } = useQuery({
+    queryKey: ["workflows-table", filterModel, page],
+    queryFn: async () => (await api.get("/workflows/table", { page: page + 1, filterModel: JSON.stringify(filterModel) })).data,
     refetchInterval: 15000,
   });
   const workflows = workflowsPage?.items ?? [];
-  const totalPages = workflowsPage ? Math.max(1, Math.ceil(workflowsPage.total / workflowsPage.pageSize)) : 1;
-  const sort = useSort(workflows ?? []);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -106,6 +86,80 @@ export function WorkflowListPage() {
     },
   });
 
+  const columns: GridColDef[] = useMemo(
+    () => [
+      {
+        field: "name",
+        headerName: t("name"),
+        flex: 1.2,
+        minWidth: 200,
+        renderCell: (params) => (
+          <Box sx={{ py: 0.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {params.row.name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {params.row.description}
+            </Typography>
+          </Box>
+        ),
+      },
+      {
+        field: "companyName",
+        headerName: "Azienda",
+        flex: 0.8,
+        minWidth: 150,
+        renderCell: (params) => (
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Typography variant="body2">{params.row.companyName ?? "—"}</Typography>
+            {user?.isSuperAdmin && (
+              <IconButton
+                size="small"
+                onClick={() => {
+                  setCompanyEditTarget({ id: params.row.id, companyId: params.row.companyId });
+                  setNewCompanyId(params.row.companyId);
+                }}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+            )}
+          </Stack>
+        ),
+      },
+      {
+        field: "status",
+        headerName: t("status"),
+        width: 140,
+        type: "singleSelect",
+        valueOptions: Object.entries(STATUS_LABEL).map(([value, v]) => ({ value, label: v.label })),
+        renderCell: (params) => <Chip size="small" label={STATUS_LABEL[params.value as string]?.label ?? params.value} color={STATUS_LABEL[params.value as string]?.color} />,
+      },
+      { field: "latestVersion", headerName: "Versione", width: 90, filterable: false, valueFormatter: (p) => `v${p.value ?? 1}` },
+      { field: "instanceCount", headerName: t("instances"), width: 100, type: "number", filterable: false },
+      {
+        field: "actions_",
+        headerName: t("actions"),
+        width: 220,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => (
+          <Stack direction="row" spacing={0.5}>
+            <Button size="small" onClick={() => navigate(`/workflow/designer/${params.row.id}`)}>
+              {t("open_designer")}
+            </Button>
+            {params.row.status !== "PUBLISHED" && (
+              <Button size="small" color="secondary" onClick={() => publishMutation.mutate(params.row.id)}>
+                {t("publish")}
+              </Button>
+            )}
+          </Stack>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, navigate]
+  );
+
   return (
     <Box sx={{ p: 3 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
@@ -123,130 +177,28 @@ export function WorkflowListPage() {
         </Stack>
       </Stack>
 
-      <Paper>
-        <TableContainer>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell sortDirection={sort.orderBy === "name" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "name"} direction={sort.orderDir} onClick={() => sort.requestSort("name")}>
-                  {t("name")}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sort.orderBy === "companyName" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "companyName"} direction={sort.orderDir} onClick={() => sort.requestSort("companyName")}>
-                  Azienda
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sortDirection={sort.orderBy === "status" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "status"} direction={sort.orderDir} onClick={() => sort.requestSort("status")}>
-                  {t("status")}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>Versione</TableCell>
-              <TableCell sortDirection={sort.orderBy === "instanceCount" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "instanceCount"} direction={sort.orderDir} onClick={() => sort.requestSort("instanceCount")}>
-                  {t("instances")}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right">{t("actions")}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ py: 0.5 }}>
-                <ClearableTextField
-                  size="small"
-                  variant="standard"
-                  placeholder="Cerca nome..."
-                  value={filters.name}
-                  onChange={(e) => updateFilter("name", e.target.value)}
-                  fullWidth
-                />
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }} />
-              <TableCell sx={{ py: 0.5 }}>
-                <TextField select size="small" variant="standard" value={filters.status} onChange={(e) => updateFilter("status", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
-                  <MenuItem value="">Tutti</MenuItem>
-                  {Object.entries(STATUS_LABEL).map(([k, v]) => (
-                    <MenuItem key={k} value={k}>
-                      {v.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }} />
-              <TableCell sx={{ py: 0.5 }} />
-              <TableCell sx={{ py: 0.5 }} align="right">
-                {hasActiveFilters && (
-                  <Button size="small" onClick={clearFilters}>
-                    Cancella filtri
-                  </Button>
-                )}
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sort.sorted.map((w: any) => (
-              <TableRow key={w.id} hover>
-                <TableCell>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {w.name}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {w.description}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" alignItems="center" spacing={0.5}>
-                    <Typography variant="body2">{w.companyName ?? "—"}</Typography>
-                    {user?.isSuperAdmin && (
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setCompanyEditTarget({ id: w.id, companyId: w.companyId });
-                          setNewCompanyId(w.companyId);
-                        }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                  </Stack>
-                </TableCell>
-                <TableCell>
-                  <Chip size="small" label={STATUS_LABEL[w.status]?.label ?? w.status} color={STATUS_LABEL[w.status]?.color} />
-                </TableCell>
-                <TableCell className="mono">v{w.latestVersion ?? 1}</TableCell>
-                <TableCell className="mono">{w.instanceCount}</TableCell>
-                <TableCell align="right">
-                  <Button size="small" onClick={() => navigate(`/workflow/designer/${w.id}`)}>
-                    {t("open_designer")}
-                  </Button>
-                  {w.status !== "PUBLISHED" && (
-                    <Button size="small" color="secondary" onClick={() => publishMutation.mutate(w.id)}>
-                      {t("publish")}
-                    </Button>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-            {(workflows ?? []).length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                    {hasActiveFilters ? "Nessun workflow trovato con questi filtri." : "Nessun workflow ancora creato."}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Paper sx={{ height: 560, display: "flex", flexDirection: "column" }}>
+        <DataGrid
+          rows={workflows}
+          columns={columns}
+          loading={isFetching}
+          getRowHeight={() => "auto"}
+          paginationMode="server"
+          filterMode="server"
+          rowCount={workflowsPage?.total ?? 0}
+          paginationModel={{ page, pageSize: 10 }}
+          onPaginationModelChange={(model) => setPage(model.page)}
+          filterModel={filterModel}
+          onFilterModelChange={setFilterModel}
+          pageSizeOptions={[10]}
+          disableRowSelectionOnClick
+          density="standard"
+          slots={{ toolbar: GridToolbar }}
+          slotProps={{ toolbar: { showQuickFilter: false } }}
+          localeText={{ noRowsLabel: "Nessun workflow trovato." }}
+          sx={{ border: 0 }}
+        />
       </Paper>
-
-      {totalPages > 1 && (
-        <Stack alignItems="center" sx={{ mt: 2 }}>
-          <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} />
-        </Stack>
-      )}
 
       <Dialog open={openCreate} onClose={() => setOpenCreate(false)} fullWidth maxWidth="xs">
         <DialogTitle>Nuovo workflow</DialogTitle>

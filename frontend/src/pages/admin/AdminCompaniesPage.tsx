@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -6,26 +6,17 @@ import {
   Typography,
   Button,
   Paper,
-  Table,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   IconButton,
-  TableSortLabel,
-  Pagination,
 } from "@mui/material";
+import { DataGrid, GridColDef, GridToolbar, GridFilterModel } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { api } from "../../api/client";
-import { useSort } from "../../hooks/useSort";
 import { ClearableTextField } from "../../components/ClearableTextField";
 
 export function AdminCompaniesPage() {
@@ -35,26 +26,14 @@ export function AdminCompaniesPage() {
   const [name, setName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ name: "" });
+  const [page, setPage] = useState(0);
+  const [filterModel, setFilterModel] = useState<GridFilterModel>({ items: [] });
 
-  function updateFilter(key: string, value: string) {
-    setFilters((f) => ({ ...f, [key]: value }));
-    setPage(1);
-  }
-  function clearFilters() {
-    setFilters({ name: "" });
-    setPage(1);
-  }
-  const hasActiveFilters = Object.values(filters).some((v) => v);
-
-  const { data: companiesPage } = useQuery({
-    queryKey: ["admin-companies-table", filters, page],
-    queryFn: async () => (await api.get("/admin/companies/table", { ...filters, page })).data,
+  const { data: companiesPage, isFetching } = useQuery({
+    queryKey: ["admin-companies-table", filterModel, page],
+    queryFn: async () => (await api.get("/admin/companies/table", { filterModel: JSON.stringify(filterModel), page: page + 1 })).data,
   });
   const companies = companiesPage?.items ?? [];
-  const totalPages = companiesPage ? Math.max(1, Math.ceil(companiesPage.total / companiesPage.pageSize)) : 1;
-  const sort = useSort(companies ?? []);
 
   function closeDialog() {
     queryClient.invalidateQueries({ queryKey: ["admin-companies-table"] });
@@ -96,6 +75,40 @@ export function AdminCompaniesPage() {
     setOpen(true);
   }
 
+  const columns: GridColDef[] = useMemo(
+    () => [
+      { field: "name", headerName: "Nome", flex: 1, minWidth: 200 },
+      { field: "slug", headerName: "Codice", flex: 0.7, minWidth: 140 },
+      {
+        field: "actions_",
+        headerName: "Azioni",
+        width: 100,
+        sortable: false,
+        filterable: false,
+        align: "right",
+        headerAlign: "right",
+        renderCell: (params) => (
+          <Stack direction="row">
+            <IconButton size="small" onClick={() => openEdit(params.row)}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => {
+                setDeleteTarget(params.row);
+                setDeleteError(null);
+              }}
+            >
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
   return (
     <Box sx={{ p: 3 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
@@ -110,67 +123,26 @@ export function AdminCompaniesPage() {
         </Button>
       </Stack>
 
-      <Paper>
-        <TableContainer>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell sortDirection={sort.orderBy === "name" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "name"} direction={sort.orderDir} onClick={() => sort.requestSort("name")}>
-                  Nome
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>Codice</TableCell>
-              <TableCell align="right">Azioni</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ py: 0.5 }}>
-                <ClearableTextField size="small" variant="standard" placeholder="Cerca nome..." value={filters.name} onChange={(e) => updateFilter("name", e.target.value)} fullWidth />
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }} />
-              <TableCell sx={{ py: 0.5 }} align="right">
-                {hasActiveFilters && (
-                  <Button size="small" onClick={clearFilters}>
-                    Cancella filtri
-                  </Button>
-                )}
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sort.sorted.map((c: any) => (
-              <TableRow key={c.id} hover>
-                <TableCell>{c.name}</TableCell>
-                <TableCell className="mono">{c.slug}</TableCell>
-                <TableCell align="right">
-                  <IconButton size="small" onClick={() => openEdit(c)}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton size="small" onClick={() => { setDeleteTarget(c); setDeleteError(null); }}>
-                    <DeleteOutlineIcon fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-            {companies.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={3}>
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                    {hasActiveFilters ? "Nessuna azienda trovata con questi filtri." : "Nessuna azienda creata."}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Paper sx={{ height: 520, display: "flex", flexDirection: "column" }}>
+        <DataGrid
+          rows={companies}
+          columns={columns}
+          loading={isFetching}
+          paginationMode="server"
+          filterMode="server"
+          rowCount={companiesPage?.total ?? 0}
+          paginationModel={{ page, pageSize: 10 }}
+          onPaginationModelChange={(model) => setPage(model.page)}
+          filterModel={filterModel}
+          onFilterModelChange={setFilterModel}
+          pageSizeOptions={[10]}
+          disableRowSelectionOnClick
+          slots={{ toolbar: GridToolbar }}
+          slotProps={{ toolbar: { showQuickFilter: false } }}
+          localeText={{ noRowsLabel: "Nessuna azienda trovata." }}
+          sx={{ border: 0 }}
+        />
       </Paper>
-
-      {totalPages > 1 && (
-        <Stack alignItems="center" sx={{ mt: 2 }}>
-          <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} />
-        </Stack>
-      )}
 
       <Dialog open={open} onClose={closeDialog} fullWidth maxWidth="xs">
         <DialogTitle>{editingId ? "Modifica azienda" : "Nuova azienda"}</DialogTitle>

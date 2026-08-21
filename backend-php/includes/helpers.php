@@ -30,6 +30,59 @@ function require_fields(array $data, array $fields): void
     }
 }
 
+// Traduce il filterModel della MUI DataGrid (colonna, operatore, valore) in
+// clausole SQL. $columnMap mappa il nome campo lato frontend alla colonna SQL
+// effettiva (es. 'companyName' => 'c.name'). Ritorna [wherePieces, params].
+function apply_datagrid_filters(?string $filterModelJson, array $columnMap): array
+{
+    $where = [];
+    $params = [];
+    if (!$filterModelJson) return [$where, $params];
+
+    $model = json_decode($filterModelJson, true);
+    if (!is_array($model) || empty($model['items'])) return [$where, $params];
+
+    foreach ($model['items'] as $item) {
+        $field = $item['field'] ?? null;
+        $operator = $item['operator'] ?? 'contains';
+        $value = $item['value'] ?? null;
+        if (!$field || !isset($columnMap[$field])) continue;
+        if ($value === null || $value === '') {
+            if (!in_array($operator, ['isEmpty', 'isNotEmpty'], true)) continue;
+        }
+        $col = $columnMap[$field];
+
+        switch ($operator) {
+            case 'equals':
+            case 'is':
+                $where[] = "$col = ?";
+                $params[] = $value;
+                break;
+            case 'startsWith':
+                $where[] = "$col LIKE ?";
+                $params[] = $value . '%';
+                break;
+            case 'endsWith':
+                $where[] = "$col LIKE ?";
+                $params[] = '%' . $value;
+                break;
+            case 'isEmpty':
+                $where[] = "($col IS NULL OR $col = '')";
+                break;
+            case 'isNotEmpty':
+                $where[] = "($col IS NOT NULL AND $col != '')";
+                break;
+            case 'contains':
+            default:
+                $where[] = "$col LIKE ?";
+                $params[] = '%' . $value . '%';
+                break;
+        }
+    }
+
+    return [$where, $params];
+}
+
 // Salva un'immagine profilo (base64) su disco e ritorna il nome file da salvare in DB
 function save_avatar(string $dataBase64, string $mimeType): ?string
 {

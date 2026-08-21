@@ -6,12 +6,6 @@ import {
   Typography,
   Button,
   Paper,
-  Table,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
   Chip,
   Dialog,
   DialogTitle,
@@ -19,19 +13,17 @@ import {
   DialogActions,
   MenuItem,
   TextField,
-  Pagination,
   IconButton,
   ToggleButtonGroup,
   ToggleButton,
   CircularProgress,
-  TableSortLabel,
 } from "@mui/material";
+import { DataGrid, GridColDef, GridToolbar, GridFilterModel } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
 import TimelineIcon from "@mui/icons-material/TimelineOutlined";
 import dayjs from "dayjs";
 import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
-import { useSort } from "../../hooks/useSort";
 import { useI18n } from "../../i18n";
 import { CompanySelector } from "../../components/CompanySelector";
 import { StepDots, computeMainSequence, computeStepStatuses } from "./StepDots";
@@ -88,23 +80,28 @@ export function InstanceListPage() {
   const [initialNodeId, setInitialNodeId] = useState<string | null>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
 
-  const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ code: "", workflowId: "", status: "", anagrafica: "", dateFrom: "", dateTo: "", openClosed: "open" });
+  const [page, setPage] = useState(0);
+  const [openClosed, setOpenClosed] = useState("open");
+  const [workflowFilterId, setWorkflowFilterId] = useState("");
+  const [anagrafica, setAnagrafica] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [filterModel, setFilterModel] = useState<GridFilterModel>({ items: [] });
 
-  function updateFilter(key: string, value: string) {
-    setPage(1);
-    setFilters((f) => ({ ...f, [key]: value }));
-  }
-
-  function clearFilters() {
-    setPage(1);
-    setFilters((f) => ({ ...f, code: "", workflowId: "", status: "", anagrafica: "", dateFrom: "", dateTo: "" }));
-  }
-  const hasActiveFilters = !!(filters.code || filters.workflowId || filters.status || filters.anagrafica || filters.dateFrom || filters.dateTo);
-
-  const { data } = useQuery({
-    queryKey: ["instances", page, filters],
-    queryFn: async () => (await api.get("/instances", { page, ...filters })).data,
+  const { data, isFetching } = useQuery({
+    queryKey: ["instances", page, openClosed, workflowFilterId, anagrafica, dateFrom, dateTo, filterModel],
+    queryFn: async () =>
+      (
+        await api.get("/instances", {
+          page: page + 1,
+          openClosed,
+          workflowId: workflowFilterId,
+          anagrafica,
+          dateFrom,
+          dateTo,
+          filterModel: JSON.stringify(filterModel),
+        })
+      ).data,
     refetchInterval: 8000,
   });
 
@@ -120,7 +117,79 @@ export function InstanceListPage() {
 
   const publishedWorkflows = (workflows ?? []).filter((w: any) => w.status === "PUBLISHED");
   const items = data?.items ?? [];
-  const sort = useSort(items);
+
+  const columns: GridColDef[] = useMemo(
+    () => [
+      { field: "code", headerName: t("code"), width: 150 },
+      { field: "workflowName", headerName: "Workflow", flex: 0.8, minWidth: 160, sortable: false, filterable: false, valueGetter: (p) => p.row.workflow?.name },
+      {
+        field: "status",
+        headerName: "Stato",
+        width: 140,
+        type: "singleSelect",
+        valueOptions: STATUS_OPTIONS,
+        renderCell: (params) => <Chip size="small" label={params.value} color={STATUS_COLOR[params.value as string]} />,
+      },
+      {
+        field: "progress",
+        headerName: t("progress"),
+        flex: 1,
+        minWidth: 220,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => (
+          <InlineSteps
+            item={params.row}
+            onSelect={(nodeId) => {
+              setDrawerVisible(false);
+              setInitialNodeId(nodeId);
+              setDrawerInstanceId(params.row.id);
+            }}
+          />
+        ),
+      },
+      {
+        field: "whoseTurn",
+        headerName: t("whose_turn"),
+        flex: 0.7,
+        minWidth: 140,
+        sortable: false,
+        filterable: false,
+        valueGetter: (p) => whoseTurnLabel(p.row, companyUsers ?? []),
+      },
+      {
+        field: "createdAt",
+        headerName: t("created"),
+        width: 160,
+        filterable: false,
+        valueFormatter: (p) => dayjs(p.value as string).format("DD/MM/YYYY HH:mm"),
+      },
+      {
+        field: "timeline_",
+        headerName: t("timeline"),
+        width: 90,
+        sortable: false,
+        filterable: false,
+        align: "right",
+        headerAlign: "right",
+        renderCell: (params) => (
+          <IconButton
+            size="small"
+            onClick={() => {
+              setInitialNodeId(null);
+              setDrawerInstanceId(params.row.id);
+              setDrawerVisible(true);
+            }}
+          >
+            <TimelineIcon fontSize="small" />
+          </IconButton>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [companyUsers, t]
+  );
+
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
   const createMutation = useMutation({
@@ -151,164 +220,98 @@ export function InstanceListPage() {
         </Stack>
       </Stack>
 
-      <ToggleButtonGroup
-        size="small"
-        exclusive
-        value={filters.openClosed}
-        onChange={(_, value) => value && updateFilter("openClosed", value)}
-        sx={{ mb: 2 }}
-      >
-        <ToggleButton value="open">{t("open_f")}</ToggleButton>
-        <ToggleButton value="closed">{t("closed_f")}</ToggleButton>
-        <ToggleButton value="all">{t("all")}</ToggleButton>
-      </ToggleButtonGroup>
+      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mb: 2 }}>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={openClosed}
+          onChange={(_, value) => {
+            if (value) {
+              setPage(0);
+              setOpenClosed(value);
+            }
+          }}
+        >
+          <ToggleButton value="open">{t("open_f")}</ToggleButton>
+          <ToggleButton value="closed">{t("closed_f")}</ToggleButton>
+          <ToggleButton value="all">{t("all")}</ToggleButton>
+        </ToggleButtonGroup>
 
-      <Paper>
-        <TableContainer>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell sortDirection={sort.orderBy === "code" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "code"} direction={sort.orderDir} onClick={() => sort.requestSort("code")}>
-                  {t("code")}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>Workflow</TableCell>
-              <TableCell sortDirection={sort.orderBy === "status" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "status"} direction={sort.orderDir} onClick={() => sort.requestSort("status")}>
-                  Stato
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>{t("progress")}</TableCell>
-              <TableCell>{t("whose_turn")}</TableCell>
-              <TableCell sortDirection={sort.orderBy === "createdAt" ? sort.orderDir : false}>
-                <TableSortLabel active={sort.orderBy === "createdAt"} direction={sort.orderDir} onClick={() => sort.requestSort("createdAt")}>
-                  {t("created")}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right">{t("timeline")}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ py: 0.5 }}>
-                <ClearableTextField size="small" variant="standard" placeholder={t("order_number") + "..."} value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} fullWidth />
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }}>
-                <TextField select size="small" variant="standard" value={filters.workflowId} onChange={(e) => updateFilter("workflowId", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
-                  <MenuItem value="">{t("all")}</MenuItem>
-                  {(workflows ?? []).map((w: any) => (
-                    <MenuItem key={w.id} value={w.id}>
-                      {w.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }}>
-                <TextField select size="small" variant="standard" value={filters.status} onChange={(e) => updateFilter("status", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
-                  <MenuItem value="">{t("all")}</MenuItem>
-                  {STATUS_OPTIONS.map((s) => (
-                    <MenuItem key={s} value={s}>
-                      {s}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }}>
-                <ClearableTextField
-                  size="small"
-                  variant="standard"
-                  placeholder={t("customer") + "..."}
-                  value={filters.anagrafica}
-                  onChange={(e) => updateFilter("anagrafica", e.target.value)}
-                  fullWidth
-                />
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }} />
-              <TableCell sx={{ py: 0.5 }}>
-                <Stack direction="row" spacing={0.5}>
-                  <TextField
-                    type="date"
-                    size="small"
-                    variant="standard"
-                    InputLabelProps={{ shrink: true }}
-                    value={filters.dateFrom}
-                    onChange={(e) => updateFilter("dateFrom", e.target.value)}
-                    sx={{ width: 105 }}
-                  />
-                  <TextField
-                    type="date"
-                    size="small"
-                    variant="standard"
-                    InputLabelProps={{ shrink: true }}
-                    value={filters.dateTo}
-                    onChange={(e) => updateFilter("dateTo", e.target.value)}
-                    sx={{ width: 105 }}
-                  />
-                </Stack>
-              </TableCell>
-              <TableCell sx={{ py: 0.5 }} align="right">
-                {hasActiveFilters && (
-                  <Button size="small" onClick={clearFilters}>
-                    Cancella filtri
-                  </Button>
-                )}
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sort.sorted.map((inst: any) => (
-              <TableRow key={inst.id} hover>
-                <TableCell className="mono">{inst.code}</TableCell>
-                <TableCell>{inst.workflow?.name}</TableCell>
-                <TableCell>
-                  <Chip size="small" label={inst.status} color={STATUS_COLOR[inst.status]} />
-                </TableCell>
-                <TableCell sx={{ minWidth: 220 }}>
-                  <InlineSteps
-                    item={inst}
-                    onSelect={(nodeId) => {
-                      setDrawerVisible(false);
-                      setInitialNodeId(nodeId);
-                      setDrawerInstanceId(inst.id);
-                    }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">{whoseTurnLabel(inst, companyUsers ?? [])}</Typography>
-                </TableCell>
-                <TableCell>{dayjs(inst.createdAt).format("DD/MM/YYYY HH:mm")}</TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    size="small"
-                    onClick={() => {
-                      setInitialNodeId(null);
-                      setDrawerInstanceId(inst.id);
-                      setDrawerVisible(true);
-                    }}
-                  >
-                    <TimelineIcon fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-            {items.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                    {t("no_results_filters")}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+        <TextField
+          select
+          size="small"
+          label="Workflow"
+          value={workflowFilterId}
+          onChange={(e) => {
+            setPage(0);
+            setWorkflowFilterId(e.target.value);
+          }}
+          sx={{ minWidth: 180 }}
+        >
+          <MenuItem value="">{t("all")}</MenuItem>
+          {(workflows ?? []).map((w: any) => (
+            <MenuItem key={w.id} value={w.id}>
+              {w.name}
+            </MenuItem>
+          ))}
+        </TextField>
+
+        <ClearableTextField
+          size="small"
+          label={t("customer")}
+          placeholder={t("customer") + "..."}
+          value={anagrafica}
+          onChange={(e) => {
+            setPage(0);
+            setAnagrafica(e.target.value);
+          }}
+        />
+
+        <TextField
+          type="date"
+          size="small"
+          label={t("from_date")}
+          InputLabelProps={{ shrink: true }}
+          value={dateFrom}
+          onChange={(e) => {
+            setPage(0);
+            setDateFrom(e.target.value);
+          }}
+        />
+        <TextField
+          type="date"
+          size="small"
+          label={t("to_date")}
+          InputLabelProps={{ shrink: true }}
+          value={dateTo}
+          onChange={(e) => {
+            setPage(0);
+            setDateTo(e.target.value);
+          }}
+        />
+      </Stack>
+
+      <Paper sx={{ height: 600, display: "flex", flexDirection: "column" }}>
+        <DataGrid
+          rows={items}
+          columns={columns}
+          loading={isFetching}
+          getRowHeight={() => "auto"}
+          paginationMode="server"
+          filterMode="server"
+          rowCount={data?.total ?? 0}
+          paginationModel={{ page, pageSize: 10 }}
+          onPaginationModelChange={(model) => setPage(model.page)}
+          filterModel={filterModel}
+          onFilterModelChange={setFilterModel}
+          pageSizeOptions={[10]}
+          disableRowSelectionOnClick
+          slots={{ toolbar: GridToolbar }}
+          slotProps={{ toolbar: { showQuickFilter: false } }}
+          localeText={{ noRowsLabel: t("no_results_filters") }}
+          sx={{ border: 0 }}
+        />
       </Paper>
-
-      {totalPages > 1 && (
-        <Stack alignItems="center" sx={{ mt: 2 }}>
-          <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} color="primary" />
-        </Stack>
-      )}
 
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>{t("new_instance")}</DialogTitle>
