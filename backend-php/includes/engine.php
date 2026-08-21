@@ -2,6 +2,7 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/audit.php';
 require_once __DIR__ . '/crypto.php';
+require_once __DIR__ . '/mailer.php';
 
 // Se il responsabile di uno step e' impostato esattamente su "AI", il passo
 // si risolve da solo (nessun umano deve intervenire).
@@ -290,11 +291,31 @@ function advance_instance(string $instanceId): void
         }
 
         if ($type === 'email') {
+            $label = $node['data']['label'] ?? 'Notifica';
+            $body = $node['data']['config']['template'] ?? 'Aggiornamento sul processo in corso.';
+
             db()->prepare('
                 INSERT INTO notifications (id, company_id, user_id, channel, title, body)
                 VALUES (?, ?, ?, "email", ?, ?)
-            ')->execute([new_id('notif'), $companyId, $instance['created_by_id'], $node['data']['label'] ?? 'Notifica', $node['data']['config']['template'] ?? 'Aggiornamento sul processo in corso.']);
-            log_audit($companyId, null, $instanceId, 'Email inviata: "' . ($node['data']['label'] ?? '') . '"');
+            ')->execute([new_id('notif'), $companyId, $instance['created_by_id'], $label, $body]);
+
+            $uStmt = db()->prepare('SELECT email FROM users WHERE id = ?');
+            $uStmt->execute([$instance['created_by_id']]);
+            $recipient = $uStmt->fetch(PDO::FETCH_ASSOC)['email'] ?? null;
+
+            if ($recipient) {
+                $result = send_mail($recipient, $label, $body);
+                if ($result['simulated']) {
+                    log_audit($companyId, null, $instanceId, 'Email simulata (SMTP non configurato): "' . $label . '"');
+                } elseif ($result['sent']) {
+                    log_audit($companyId, null, $instanceId, 'Email inviata a ' . $recipient . ': "' . $label . '"');
+                } else {
+                    log_audit($companyId, null, $instanceId, 'Email NON inviata a ' . $recipient . ' (' . $result['error'] . '): "' . $label . '"');
+                }
+            } else {
+                log_audit($companyId, null, $instanceId, 'Email simulata (nessun destinatario): "' . $label . '"');
+            }
+
             $next = find_outgoing($edges, $node['id']);
             $currentId = $next['target'] ?? null;
             continue;

@@ -1,18 +1,37 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Box, Paper, TextField, Button, Typography, Alert, Stack } from "@mui/material";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Box, Paper, TextField, Button, Typography, Alert, Stack, Divider } from "@mui/material";
 import { PasswordField } from "../components/PasswordField";
 import { ClearableTextField } from "../components/ClearableTextField";
 import { api } from "../api/client";
 import { useAuthStore } from "../store/authStore";
+
+function apiBase(): string {
+  let path = window.location.pathname;
+  if (!path.endsWith("/")) path = path.substring(0, path.lastIndexOf("/") + 1);
+  return `${path}api/`;
+}
 
 export function LoginPage() {
   const [email, setEmail] = useState("admin@demo.it");
   const [password, setPassword] = useState("password123");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [oauthProviders, setOauthProviders] = useState<Record<string, { clientId: string }>>({});
   const setSession = useAuthStore((s) => s.setSession);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("oauth_error")) {
+      setError("Accesso con il provider esterno non riuscito. Riprova o usa email e password.");
+    }
+    api
+      .get("/auth/oauth-providers")
+      .then((res) => setOauthProviders(res.data))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,6 +47,8 @@ export function LoginPage() {
       setLoading(false);
     }
   }
+
+  const hasOAuth = Object.keys(oauthProviders).length > 0;
 
   return (
     <Box
@@ -75,6 +96,24 @@ export function LoginPage() {
             </Button>
           </Stack>
         </form>
+
+        {hasOAuth && (
+          <>
+            <Divider sx={{ my: 2.5 }}>oppure</Divider>
+            <Stack spacing={1.5}>
+              {oauthProviders.google && (
+                <Button variant="outlined" fullWidth onClick={() => (window.location.href = `${apiBase()}oauth.php?action=start&provider=google`)}>
+                  Accedi con Google
+                </Button>
+              )}
+              {oauthProviders.facebook && (
+                <Button variant="outlined" fullWidth onClick={() => (window.location.href = `${apiBase()}oauth.php?action=start&provider=facebook`)}>
+                  Accedi con Facebook
+                </Button>
+              )}
+            </Stack>
+          </>
+        )}
 
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 3 }}>
           Demo: superadmin@platform.it (Super Amministratore) · admin@demo.it · supervisore@demo.it · operatore@demo.it — password: password123

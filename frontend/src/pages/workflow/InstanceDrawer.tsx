@@ -73,7 +73,7 @@ export function InstanceDrawer({
 
   const user = useAuthStore((s) => s.user);
   const companies = useAuthStore((s) => s.companies);
-  const currentCompanyId = useAuthStore((s) => s.currentCompanyId);
+  const currentCompanyId = useAuthStore((s) => s.getCurrentCompanyForApp("workflow"));
   const roleKey = companies.find((c) => c.id === currentCompanyId)?.roleKey ?? "";
 
   const { data: instance } = useQuery({

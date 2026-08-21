@@ -7,6 +7,8 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/tenant.php';
 require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/engine.php';
+require_once __DIR__ . '/includes/settings.php';
+require_once __DIR__ . '/includes/mailer.php';
 require_once __DIR__ . '/includes/tickets.php';
 
 start_session();
@@ -16,7 +18,7 @@ $action = $input['action'] ?? ($_GET['action'] ?? '');
 if (!$action) error_response('Azione non specificata', 400);
 
 // Azioni pubbliche (non richiedono sessione attiva)
-$public = ['auth.login'];
+$public = ['auth.login', 'auth.oauthProviders'];
 
 if (!in_array($action, $public, true)) {
     $user = current_user();
@@ -1054,6 +1056,80 @@ switch ($action) {
         break;
 
     // ---------------- DASHBOARD ----------------
+
+    case 'settings.getMailConfig':
+        require_super_admin($user);
+        $config = get_setting('mail_smtp', []);
+        // La password non esce mai in chiaro: solo un'indicazione che e' impostata.
+        json_response([
+            'host' => $config['host'] ?? '', 'port' => $config['port'] ?? 587,
+            'encryption' => $config['encryption'] ?? 'tls', 'username' => $config['username'] ?? '',
+            'hasPassword' => !empty($config['password']), 'fromEmail' => $config['fromEmail'] ?? '', 'fromName' => $config['fromName'] ?? '',
+        ]);
+        break;
+
+    case 'settings.updateMailConfig':
+        require_super_admin($user);
+        require_fields($input, ['host']);
+        $existing = get_setting('mail_smtp', []);
+        $config = [
+            'host' => $input['host'], 'port' => (int) ($input['port'] ?? 587),
+            'encryption' => in_array($input['encryption'] ?? 'tls', ['none', 'ssl', 'tls'], true) ? $input['encryption'] : 'tls',
+            'username' => $input['username'] ?? '', 'fromEmail' => $input['fromEmail'] ?? '', 'fromName' => $input['fromName'] ?? '',
+            // password: se non viene inviata una nuova, mantiene quella gia' salvata
+            'password' => !empty($input['password']) ? encrypt_data($input['password']) : ($existing['password'] ?? null),
+        ];
+        set_setting('mail_smtp', $config);
+        log_audit(null, $user['id'], null, 'Configurazione email SMTP aggiornata');
+        json_response(['ok' => true]);
+        break;
+
+    case 'settings.getOAuthConfig':
+        require_super_admin($user);
+        $providers = [];
+        foreach (['google', 'facebook'] as $p) {
+            $c = get_setting('oauth_' . $p, []);
+            $providers[$p] = ['enabled' => !empty($c['enabled']), 'clientId' => $c['clientId'] ?? '', 'hasSecret' => !empty($c['clientSecret'])];
+        }
+        json_response($providers);
+        break;
+
+    case 'settings.updateOAuthConfig':
+        require_super_admin($user);
+        require_fields($input, ['provider']);
+        if (!in_array($input['provider'], ['google', 'facebook'], true)) error_response('Provider non supportato', 400);
+        $key = 'oauth_' . $input['provider'];
+        $existing = get_setting($key, []);
+        set_setting($key, [
+            'enabled' => !empty($input['enabled']),
+            'clientId' => $input['clientId'] ?? '',
+            'clientSecret' => !empty($input['clientSecret']) ? encrypt_data($input['clientSecret']) : ($existing['clientSecret'] ?? null),
+        ]);
+        log_audit(null, $user['id'], null, 'Configurazione OAuth aggiornata: ' . $input['provider']);
+        json_response(['ok' => true]);
+        break;
+
+    // Pubblica (nessun login richiesto): dice alla schermata di accesso quali
+    // pulsanti "Accedi con..." mostrare. Non espone mai il client secret.
+    case 'auth.oauthProviders':
+        $providers = [];
+        foreach (['google', 'facebook'] as $p) {
+            $c = get_setting('oauth_' . $p, []);
+            if (!empty($c['enabled']) && !empty($c['clientId'])) {
+                $providers[$p] = ['clientId' => $c['clientId']];
+            }
+        }
+        json_response($providers);
+        break;
+
+    case 'settings.testMail':
+        require_super_admin($user);
+        require_fields($input, ['toEmail']);
+        $result = send_mail($input['toEmail'], 'Email di prova da FlowSphere', "Se ricevi questo messaggio, la configurazione SMTP funziona correttamente.\n\nInviato il " . date('d/m/Y H:i'));
+        if ($result['simulated']) error_response('Nessuna configurazione SMTP salvata: imposta prima host/porta/credenziali.', 400);
+        if (!$result['sent']) error_response('Invio fallito: ' . $result['error'], 502);
+        json_response(['ok' => true]);
+        break;
 
     case 'auditLogs.list':
         require_super_admin($user);

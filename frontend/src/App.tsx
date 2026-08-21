@@ -14,6 +14,8 @@ import { PublicTicketPage } from "./pages/public/PublicTicketPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminPermissionsPage } from "./pages/admin/AdminPermissionsPage";
 import { AuditLogPage } from "./pages/admin/AuditLogPage";
+import { AdminMailSettingsPage } from "./pages/admin/AdminMailSettingsPage";
+import { AdminOAuthSettingsPage } from "./pages/admin/AdminOAuthSettingsPage";
 import { AdminCompaniesPage } from "./pages/admin/AdminCompaniesPage";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -31,10 +33,14 @@ function RequireSuperAdmin({ children }: { children: JSX.Element }) {
 function RequireAppAdmin({ appKey, children }: { appKey: string | string[]; children: JSX.Element }) {
   const user = useAuthStore((s) => s.user);
   const companies = useAuthStore((s) => s.companies);
-  const currentCompanyId = useAuthStore((s) => s.currentCompanyId);
-  const company = companies.find((c) => c.id === currentCompanyId);
+  const getCurrentCompanyForApp = useAuthStore((s) => s.getCurrentCompanyForApp);
   const keys = Array.isArray(appKey) ? appKey : [appKey];
-  const isAdmin = user?.isSuperAdmin || keys.some((k) => (company?.rolesByApp?.[k] ?? company?.roleKey) === "ADMIN");
+  const isAdmin =
+    user?.isSuperAdmin ||
+    keys.some((k) => {
+      const company = companies.find((c) => c.id === getCurrentCompanyForApp(k));
+      return (company?.rolesByApp?.[k] ?? company?.roleKey) === "ADMIN";
+    });
   if (!isAdmin) return <Navigate to="/workflow/dashboard" replace />;
   return children;
 }
@@ -122,6 +128,22 @@ export function App() {
           element={
             <RequireSuperAdmin>
               <AuditLogPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="admin/mail-settings"
+          element={
+            <RequireSuperAdmin>
+              <AdminMailSettingsPage />
+            </RequireSuperAdmin>
+          }
+        />
+        <Route
+          path="admin/oauth-settings"
+          element={
+            <RequireSuperAdmin>
+              <AdminOAuthSettingsPage />
             </RequireSuperAdmin>
           }
         />

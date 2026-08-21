@@ -13,33 +13,51 @@ interface AuthState {
   token: string | null;
   user: { id: string; email: string; fullName: string; isSuperAdmin: boolean; hasAvatar?: boolean } | null;
   companies: CompanyOption[];
-  currentCompanyId: string | null;
+  // L'azienda selezionata ora si ricorda per singola applicazione (es. puoi
+  // lavorare su Workflow per l'Azienda A e su Ticket per l'Azienda B insieme).
+  // "_default" resta come ripiego generale per le pagine non legate a un'app
+  // specifica (es. Amministrazione).
+  currentCompanyIdByApp: Record<string, string>;
   setSession: (token: string, user: AuthState["user"]) => void;
   setCompanies: (companies: CompanyOption[]) => void;
-  setCurrentCompany: (companyId: string) => void;
+  setCurrentCompanyForApp: (appKey: string, companyId: string) => void;
+  getCurrentCompanyForApp: (appKey: string) => string | null;
   logout: () => void;
 }
 
 const stored = localStorage.getItem("wf_session");
-const initial = stored ? JSON.parse(stored) : { token: null, user: null, currentCompanyId: null };
+const parsedStored = stored ? JSON.parse(stored) : {};
+// Migrazione dalla vecchia sessione con un solo currentCompanyId globale:
+// diventa il valore di ripiego per tutte le app finche' non se ne sceglie uno specifico.
+const initialByApp: Record<string, string> =
+  parsedStored.currentCompanyIdByApp ?? (parsedStored.currentCompanyId ? { _default: parsedStored.currentCompanyId } : {});
+
+function persist(partial: Partial<{ token: string | null; user: any; currentCompanyIdByApp: Record<string, string> }>) {
+  const current = JSON.parse(localStorage.getItem("wf_session") ?? "{}");
+  localStorage.setItem("wf_session", JSON.stringify({ ...current, ...partial }));
+}
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  token: initial.token,
-  user: initial.user,
+  token: parsedStored.token ?? null,
+  user: parsedStored.user ?? null,
   companies: [],
-  currentCompanyId: initial.currentCompanyId,
+  currentCompanyIdByApp: initialByApp,
   setSession: (token, user) => {
     set({ token, user });
-    localStorage.setItem("wf_session", JSON.stringify({ token, user, currentCompanyId: get().currentCompanyId }));
+    persist({ token, user });
   },
   setCompanies: (companies) => set({ companies }),
-  setCurrentCompany: (companyId) => {
-    set({ currentCompanyId: companyId });
-    const { token, user } = get();
-    localStorage.setItem("wf_session", JSON.stringify({ token, user, currentCompanyId: companyId }));
+  setCurrentCompanyForApp: (appKey, companyId) => {
+    const next = { ...get().currentCompanyIdByApp, [appKey]: companyId, _default: companyId };
+    set({ currentCompanyIdByApp: next });
+    persist({ currentCompanyIdByApp: next });
+  },
+  getCurrentCompanyForApp: (appKey) => {
+    const byApp = get().currentCompanyIdByApp;
+    return byApp[appKey] ?? byApp._default ?? null;
   },
   logout: () => {
     localStorage.removeItem("wf_session");
-    set({ token: null, user: null, currentCompanyId: null, companies: [] });
+    set({ token: null, user: null, currentCompanyIdByApp: {}, companies: [] });
   },
 }));

@@ -223,6 +223,10 @@ function run_migrations(PDO $pdo): void
         $pdo->exec('INSERT INTO audit_logs SELECT * FROM audit_logs_old');
         $pdo->exec('DROP TABLE audit_logs_old');
     }
+
+    if (!$tableExists('settings')) {
+        $pdo->exec("CREATE TABLE settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)");
+    }
 }
 
 function new_id(string $prefix = ''): string
@@ -421,6 +425,11 @@ function create_schema(PDO $pdo): void
             author_name TEXT,
             body TEXT NOT NULL,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE settings (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT
         );
 
         CREATE TABLE ai_decisions (

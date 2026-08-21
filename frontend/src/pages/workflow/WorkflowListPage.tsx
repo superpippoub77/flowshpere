@@ -45,8 +45,9 @@ export function WorkflowListPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const companies = useAuthStore((s) => s.companies);
-  const currentCompanyId = useAuthStore((s) => s.currentCompanyId);
-  const setCurrentCompany = useAuthStore((s) => s.setCurrentCompany);
+  const getCurrentCompanyForApp = useAuthStore((s) => s.getCurrentCompanyForApp);
+  const setCurrentCompanyForApp = useAuthStore((s) => s.setCurrentCompanyForApp);
+  const currentCompanyId = getCurrentCompanyForApp("workflow");
   const [targetCompanyId, setTargetCompanyId] = useState(currentCompanyId ?? "");
   const user = useAuthStore((s) => s.user);
   const [companyEditTarget, setCompanyEditTarget] = useState<{ id: string; companyId: string } | null>(null);
@@ -66,7 +67,7 @@ export function WorkflowListPage() {
       return res.data;
     },
     onSuccess: (workflow) => {
-      if (targetCompanyId && targetCompanyId !== currentCompanyId) setCurrentCompany(targetCompanyId);
+      if (targetCompanyId && targetCompanyId !== currentCompanyId) setCurrentCompanyForApp("workflow", targetCompanyId);
       queryClient.invalidateQueries({ queryKey: ["workflows"] });
       setOpenCreate(false);
       setName("");

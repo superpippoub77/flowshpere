@@ -1,5 +1,6 @@
 import { useAuthStore } from "../store/authStore";
 import { useStatusStore } from "../store/statusStore";
+import { currentAppKeyFromLocation } from "../lib/appKey";
 
 // Il backend e' ora un unico endpoint PHP (api.php) che riceve
 // { action, ...payload } e risponde in JSON. Questo modulo espone
@@ -44,6 +45,7 @@ type Mapping = { pattern: RegExp; action: string; extract?: (m: RegExpMatchArray
 
 const MAPPINGS: Mapping[] = [
   { pattern: /^\/auth\/login$/, action: "auth.login" },
+  { pattern: /^\/auth\/oauth-providers$/, action: "auth.oauthProviders" },
   { pattern: /^\/auth\/me\/companies$/, action: "auth.meCompanies" },
   { pattern: /^\/auth\/profile$/, action: "auth.updateProfile" },
   { pattern: /^\/search$/, action: "search.global" },
@@ -91,6 +93,9 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/admin\/permissions$/, action: "__admin_permissions_get_or_set__" },
   { pattern: /^\/admin\/permissions\/revoke$/, action: "admin.permissions.revoke" },
   { pattern: /^\/admin\/audit-logs$/, action: "auditLogs.list" },
+  { pattern: /^\/admin\/mail-config$/, action: "__mail_config_get_or_update__" },
+  { pattern: /^\/admin\/mail-config\/test$/, action: "settings.testMail" },
+  { pattern: /^\/admin\/oauth-config$/, action: "__oauth_config_get_or_update__" },
 ];
 
 function resolveAction(method: "get" | "post" | "put", url: string): string {
@@ -106,6 +111,8 @@ function resolveAction(method: "get" | "post" | "put", url: string): string {
     if (m.action === "__api_tokens_list_or_create__") return method === "get" ? "apiTokens.list" : "apiTokens.create";
     if (m.action === "__tickets_list_or_create__") return method === "get" ? "tickets.list" : "tickets.create";
     if (m.action === "__ticket_categories_list_or_create__") return method === "get" ? "ticketCategories.list" : "ticketCategories.create";
+    if (m.action === "__mail_config_get_or_update__") return method === "get" ? "settings.getMailConfig" : "settings.updateMailConfig";
+    if (m.action === "__oauth_config_get_or_update__") return method === "get" ? "settings.getOAuthConfig" : "settings.updateOAuthConfig";
     return m.action;
   }
   throw new Error(`Nessuna azione API mappata per ${method.toUpperCase()} ${url}`);
@@ -122,7 +129,7 @@ function resolveParams(url: string): Record<string, string> {
 async function call(method: "get" | "post" | "put", url: string, body?: any) {
   const action = resolveAction(method, url);
   const params = resolveParams(url);
-  const { currentCompanyId } = useAuthStore.getState();
+  const currentCompanyId = useAuthStore.getState().getCurrentCompanyForApp(currentAppKeyFromLocation());
   const isWrite = method !== "get";
 
   if (isWrite && useStatusStore.getState().state !== "saving") {

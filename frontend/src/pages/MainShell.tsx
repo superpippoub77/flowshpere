@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Box,
@@ -34,6 +34,8 @@ import BusinessIcon from "@mui/icons-material/BusinessOutlined";
 import PeopleIcon from "@mui/icons-material/PeopleOutlined";
 import LockPersonIcon from "@mui/icons-material/LockPersonOutlined";
 import HistoryIcon from "@mui/icons-material/HistoryOutlined";
+import EmailIcon from "@mui/icons-material/EmailOutlined";
+import LoginIcon from "@mui/icons-material/LoginOutlined";
 import LogoutIcon from "@mui/icons-material/LogoutOutlined";
 import AccountCircleIcon from "@mui/icons-material/AccountCircleOutlined";
 import LightModeIcon from "@mui/icons-material/LightModeOutlined";
@@ -48,6 +50,7 @@ import { GlobalSearch } from "../components/GlobalSearch";
 import { ProfileDialog } from "../components/ProfileDialog";
 import { StatusBar } from "../components/StatusBar";
 import { HelpWizard } from "../components/HelpWizard";
+import { appKeyFromPath } from "../lib/appKey";
 
 const APP_OPERATIONS: Record<string, { label: string; to: string; icon: JSX.Element; adminOnly?: boolean }[]> = {
   workflow: [
@@ -72,11 +75,20 @@ const APP_ICONS: Record<string, JSX.Element> = {
   crm: <GroupsIcon />,
 };
 
+const APP_LABELS: Record<string, string> = {
+  workflow: "Workflow",
+  timesheet: "Timesheet",
+  ticket: "Ticket",
+  crm: "CRM",
+};
+
 const ADMIN_ITEMS = [
   { label: "Aziende", to: "/admin/companies", icon: <BusinessIcon fontSize="small" /> },
   { label: "Utenti", to: "/admin/users", icon: <PeopleIcon fontSize="small" /> },
   { label: "Permessi", to: "/admin/permissions", icon: <LockPersonIcon fontSize="small" /> },
   { label: "Registro attività", to: "/admin/audit-logs", icon: <HistoryIcon fontSize="small" /> },
+  { label: "Configurazione email", to: "/admin/mail-settings", icon: <EmailIcon fontSize="small" /> },
+  { label: "Accesso Google/Facebook", to: "/admin/oauth-settings", icon: <LoginIcon fontSize="small" /> },
 ];
 
 const MIN_WIDTH = 200;
@@ -111,11 +123,15 @@ function NavItem({ to, icon, label }: { to: string; icon: JSX.Element; label: st
 
 export function MainShell() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const appKey = appKeyFromPath(location.pathname);
   const user = useAuthStore((s) => s.user);
   const companies = useAuthStore((s) => s.companies);
   const setCompanies = useAuthStore((s) => s.setCompanies);
-  const currentCompanyId = useAuthStore((s) => s.currentCompanyId);
-  const setCurrentCompany = useAuthStore((s) => s.setCurrentCompany);
+  const currentCompanyIdByApp = useAuthStore((s) => s.currentCompanyIdByApp);
+  const setCurrentCompanyForApp = useAuthStore((s) => s.setCurrentCompanyForApp);
+  const getCurrentCompanyForApp = useAuthStore((s) => s.getCurrentCompanyForApp);
+  const currentCompanyId = getCurrentCompanyForApp(appKey);
   const logout = useAuthStore((s) => s.logout);
   const { mode, toggle: toggleTheme } = useThemeMode();
   const { lang, setLang, t } = useI18n();
@@ -132,8 +148,13 @@ export function MainShell() {
   const list = companies.length ? companies : data ?? [];
 
   useEffect(() => {
-    if (!currentCompanyId && list.length > 0) setCurrentCompany(list[0].id);
-  }, [list, currentCompanyId, setCurrentCompany]);
+    if (currentCompanyId || list.length === 0) return;
+    // Preferisce un'azienda in cui questa app e' effettivamente abilitata,
+    // altrimenti ripiega sulla prima disponibile.
+    const withApp = list.find((c: any) => c.applications?.some((a: any) => a.key === appKey));
+    setCurrentCompanyForApp(appKey, (withApp ?? list[0]).id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list, currentCompanyId, appKey]);
 
   const [openApps, setOpenApps] = useState<Record<string, boolean>>({ workflow: true });
   const [helpAppKey, setHelpAppKey] = useState<string | null>(null);
@@ -212,7 +233,15 @@ export function MainShell() {
 
         {!collapsed && (
           <Box sx={{ px: 2, mb: 1.5 }}>
-            <Select size="small" fullWidth value={currentCompanyId ?? ""} onChange={(e) => setCurrentCompany(e.target.value as string)}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.3 }}>
+              Azienda{APP_LABELS[appKey] ? ` — ${APP_LABELS[appKey]}` : ""}
+            </Typography>
+            <Select
+              size="small"
+              fullWidth
+              value={currentCompanyId ?? ""}
+              onChange={(e) => setCurrentCompanyForApp(appKey, e.target.value as string)}
+            >
               {list.map((c: any) => (
                 <MenuItem key={c.id} value={c.id}>
                   {c.name}
@@ -270,7 +299,13 @@ export function MainShell() {
                       <Collapse in={!!openApps[appItem.key]}>
                         <List disablePadding dense>
                           {(APP_OPERATIONS[appItem.key] ?? [])
-                            .filter((op) => !op.adminOnly || user?.isSuperAdmin || (company?.rolesByApp?.[appItem.key] ?? company?.roleKey) === "ADMIN")
+                            .filter((op) => {
+                              if (!op.adminOnly) return true;
+                              if (user?.isSuperAdmin) return true;
+                              const appCompanyId = getCurrentCompanyForApp(appItem.key);
+                              const appCompany = list.find((c: any) => c.id === appCompanyId);
+                              return (appCompany?.rolesByApp?.[appItem.key] ?? appCompany?.roleKey) === "ADMIN";
+                            })
                             .map((op) => (
                               <NavItem key={op.to} to={op.to} icon={op.icon} label={op.label} />
                             ))}
