@@ -19,7 +19,6 @@ import {
   TextField,
   MenuItem,
   Pagination,
-  Grid,
   CircularProgress,
   TableSortLabel,
 } from "@mui/material";
@@ -89,6 +88,12 @@ export function TicketListPage() {
     setPage(1);
   }
 
+  function clearFilters() {
+    setFilters({ code: "", categoryId: "", status: "", priority: "" });
+    setPage(1);
+  }
+  const hasActiveFilters = Object.values(filters).some((v) => v);
+
   return (
     <Box sx={{ p: 3 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
@@ -105,44 +110,6 @@ export function TicketListPage() {
           </Button>
         </Stack>
       </Stack>
-
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Grid container spacing={2}>
-          <Grid item xs={6} sm={3}>
-            <ClearableTextField label="N. ticket" size="small" fullWidth value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} />
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <TextField select label="Ramo" size="small" fullWidth value={filters.categoryId} onChange={(e) => updateFilter("categoryId", e.target.value)}>
-              <MenuItem value="">Tutti</MenuItem>
-              {(categories ?? []).map((c: any) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <TextField select label="Stato" size="small" fullWidth value={filters.status} onChange={(e) => updateFilter("status", e.target.value)}>
-              <MenuItem value="">Tutti</MenuItem>
-              {Object.entries(STATUS_LABEL).map(([k, v]) => (
-                <MenuItem key={k} value={k}>
-                  {v.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <TextField select label="Priorità" size="small" fullWidth value={filters.priority} onChange={(e) => updateFilter("priority", e.target.value)}>
-              <MenuItem value="">Tutte</MenuItem>
-              {Object.entries(PRIORITY_LABEL).map(([k, v]) => (
-                <MenuItem key={k} value={k}>
-                  {v.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-        </Grid>
-      </Paper>
 
       <Paper>
         <Table>
@@ -182,6 +149,50 @@ export function TicketListPage() {
                 <TableSortLabel active={sort.orderBy === "updatedAt"} direction={sort.orderDir} onClick={() => sort.requestSort("updatedAt")}>
                   Aggiornato
                 </TableSortLabel>
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ py: 0.5 }}>
+                <ClearableTextField size="small" variant="standard" placeholder="Cerca..." value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} fullWidth />
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }} />
+              <TableCell sx={{ py: 0.5 }}>
+                <TextField select size="small" variant="standard" value={filters.categoryId} onChange={(e) => updateFilter("categoryId", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
+                  <MenuItem value="">Tutti</MenuItem>
+                  {(categories ?? []).map((c: any) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }}>
+                <TextField select size="small" variant="standard" value={filters.priority} onChange={(e) => updateFilter("priority", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
+                  <MenuItem value="">Tutte</MenuItem>
+                  {Object.entries(PRIORITY_LABEL).map(([k, v]) => (
+                    <MenuItem key={k} value={k}>
+                      {v.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }}>
+                <TextField select size="small" variant="standard" value={filters.status} onChange={(e) => updateFilter("status", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
+                  <MenuItem value="">Tutti</MenuItem>
+                  {Object.entries(STATUS_LABEL).map(([k, v]) => (
+                    <MenuItem key={k} value={k}>
+                      {v.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }} />
+              <TableCell sx={{ py: 0.5 }} align="right">
+                {hasActiveFilters && (
+                  <Button size="small" onClick={clearFilters}>
+                    Cancella filtri
+                  </Button>
+                )}
               </TableCell>
             </TableRow>
           </TableHead>

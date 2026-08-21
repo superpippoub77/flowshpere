@@ -19,7 +19,6 @@ import {
   MenuItem,
   TextField,
   Pagination,
-  Grid,
   IconButton,
   ToggleButtonGroup,
   ToggleButton,
@@ -96,6 +95,12 @@ export function InstanceListPage() {
     setFilters((f) => ({ ...f, [key]: value }));
   }
 
+  function clearFilters() {
+    setPage(1);
+    setFilters((f) => ({ ...f, code: "", workflowId: "", status: "", anagrafica: "", dateFrom: "", dateTo: "" }));
+  }
+  const hasActiveFilters = !!(filters.code || filters.workflowId || filters.status || filters.anagrafica || filters.dateFrom || filters.dateTo);
+
   const { data } = useQuery({
     queryKey: ["instances", page, filters],
     queryFn: async () => (await api.get("/instances", { page, ...filters })).data,
@@ -157,66 +162,6 @@ export function InstanceListPage() {
         <ToggleButton value="all">{t("all")}</ToggleButton>
       </ToggleButtonGroup>
 
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Grid container spacing={1.5}>
-          <Grid item xs={6} sm={3} md={2}>
-            <ClearableTextField label={t("order_number")} size="small" fullWidth value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} />
-          </Grid>
-          <Grid item xs={6} sm={3} md={2}>
-            <TextField select label="Workflow" size="small" fullWidth value={filters.workflowId} onChange={(e) => updateFilter("workflowId", e.target.value)}>
-              <MenuItem value="">{t("all")}</MenuItem>
-              {(workflows ?? []).map((w: any) => (
-                <MenuItem key={w.id} value={w.id}>
-                  {w.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={6} sm={3} md={2}>
-            <TextField select label="Stato" size="small" fullWidth value={filters.status} onChange={(e) => updateFilter("status", e.target.value)}>
-              <MenuItem value="">{t("all")}</MenuItem>
-              {STATUS_OPTIONS.map((s) => (
-                <MenuItem key={s} value={s}>
-                  {s}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={6} sm={3} md={2}>
-            <ClearableTextField
-              label={t("customer")}
-              size="small"
-              fullWidth
-              placeholder="es. nome cliente"
-              value={filters.anagrafica}
-              onChange={(e) => updateFilter("anagrafica", e.target.value)}
-            />
-          </Grid>
-          <Grid item xs={6} sm={3} md={2}>
-            <TextField
-              label={t("from_date")}
-              type="date"
-              size="small"
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              value={filters.dateFrom}
-              onChange={(e) => updateFilter("dateFrom", e.target.value)}
-            />
-          </Grid>
-          <Grid item xs={6} sm={3} md={2}>
-            <TextField
-              label={t("to_date")}
-              type="date"
-              size="small"
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              value={filters.dateTo}
-              onChange={(e) => updateFilter("dateTo", e.target.value)}
-            />
-          </Grid>
-        </Grid>
-      </Paper>
-
       <Paper>
         <Table>
           <TableHead>
@@ -240,6 +185,71 @@ export function InstanceListPage() {
                 </TableSortLabel>
               </TableCell>
               <TableCell align="right">{t("timeline")}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ py: 0.5 }}>
+                <ClearableTextField size="small" variant="standard" placeholder={t("order_number") + "..."} value={filters.code} onChange={(e) => updateFilter("code", e.target.value)} fullWidth />
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }}>
+                <TextField select size="small" variant="standard" value={filters.workflowId} onChange={(e) => updateFilter("workflowId", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
+                  <MenuItem value="">{t("all")}</MenuItem>
+                  {(workflows ?? []).map((w: any) => (
+                    <MenuItem key={w.id} value={w.id}>
+                      {w.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }}>
+                <TextField select size="small" variant="standard" value={filters.status} onChange={(e) => updateFilter("status", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
+                  <MenuItem value="">{t("all")}</MenuItem>
+                  {STATUS_OPTIONS.map((s) => (
+                    <MenuItem key={s} value={s}>
+                      {s}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }}>
+                <ClearableTextField
+                  size="small"
+                  variant="standard"
+                  placeholder={t("customer") + "..."}
+                  value={filters.anagrafica}
+                  onChange={(e) => updateFilter("anagrafica", e.target.value)}
+                  fullWidth
+                />
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }} />
+              <TableCell sx={{ py: 0.5 }}>
+                <Stack direction="row" spacing={0.5}>
+                  <TextField
+                    type="date"
+                    size="small"
+                    variant="standard"
+                    InputLabelProps={{ shrink: true }}
+                    value={filters.dateFrom}
+                    onChange={(e) => updateFilter("dateFrom", e.target.value)}
+                    sx={{ width: 105 }}
+                  />
+                  <TextField
+                    type="date"
+                    size="small"
+                    variant="standard"
+                    InputLabelProps={{ shrink: true }}
+                    value={filters.dateTo}
+                    onChange={(e) => updateFilter("dateTo", e.target.value)}
+                    sx={{ width: 105 }}
+                  />
+                </Stack>
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }} align="right">
+                {hasActiveFilters && (
+                  <Button size="small" onClick={clearFilters}>
+                    Cancella filtri
+                  </Button>
+                )}
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
