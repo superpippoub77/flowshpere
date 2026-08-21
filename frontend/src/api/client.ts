@@ -51,6 +51,7 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/search$/, action: "search.global" },
 
   { pattern: /^\/workflows$/, action: "__workflows_list_or_create__" },
+  { pattern: /^\/workflows\/table$/, action: "workflows.listPaginated" },
   { pattern: /^\/workflows\/([^/]+)$/, action: "workflows.get", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/workflows\/([^/]+)\/draft$/, action: "workflows.saveDraft", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/workflows\/([^/]+)\/publish$/, action: "workflows.publish", extract: (m) => ({ id: m[1] }) },
@@ -84,9 +85,11 @@ const MAPPINGS: Mapping[] = [
   { pattern: /^\/ticket-categories\/([^/]+)\/delete$/, action: "ticketCategories.delete", extract: (m) => ({ id: m[1] }) },
 
   { pattern: /^\/admin\/users$/, action: "__admin_users_list_or_create__" },
+  { pattern: /^\/admin\/users\/table$/, action: "admin.users.listPaginated" },
   { pattern: /^\/admin\/users\/([^/]+)\/delete$/, action: "admin.users.delete", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/admin\/users\/([^/]+)$/, action: "admin.users.update", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/admin\/companies$/, action: "__admin_companies_list_or_create__" },
+  { pattern: /^\/admin\/companies\/table$/, action: "admin.companies.listPaginated" },
   { pattern: /^\/admin\/companies\/([^/]+)\/delete$/, action: "admin.companies.delete", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/admin\/companies\/([^/]+)$/, action: "admin.companies.update", extract: (m) => ({ id: m[1] }) },
   { pattern: /^\/admin\/applications$/, action: "admin.applications.list" },

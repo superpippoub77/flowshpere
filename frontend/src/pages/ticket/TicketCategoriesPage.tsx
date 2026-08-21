@@ -24,6 +24,7 @@ import EditIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
+import { CompanySelector } from "../../components/CompanySelector";
 
 export function TicketCategoriesPage() {
   const queryClient = useQueryClient();
@@ -102,9 +103,12 @@ export function TicketCategoriesPage() {
             Ogni ramo puo' avere un responsabile predefinito: i nuovi ticket in quel ramo gli vengono assegnati automaticamente.
           </Typography>
         </Stack>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-          Nuovo ramo
-        </Button>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <CompanySelector appKey="ticket" />
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            Nuovo ramo
+          </Button>
+        </Stack>
       </Stack>
 
       <Paper>

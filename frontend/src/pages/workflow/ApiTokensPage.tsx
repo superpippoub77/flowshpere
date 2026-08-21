@@ -28,6 +28,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ContentCopyIcon from "@mui/icons-material/ContentCopyOutlined";
 import { api } from "../../api/client";
+import { CompanySelector } from "../../components/CompanySelector";
 import { ClearableTextField } from "../../components/ClearableTextField";
 
 function publicLink(scope: string, token: string): string {
@@ -109,9 +110,12 @@ export function ApiTokensPage() {
             Usati da sistemi esterni (o da un modulo web pubblico) per inviare ordini o aprire ticket senza login.
           </Typography>
         </Stack>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
-          Nuovo token
-        </Button>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <CompanySelector appKey="workflow" />
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+            Nuovo token
+          </Button>
+        </Stack>
       </Stack>
 
       <Paper>

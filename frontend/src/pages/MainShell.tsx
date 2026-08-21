@@ -5,7 +5,6 @@ import {
   Box,
   Stack,
   Typography,
-  Select,
   MenuItem,
   IconButton,
   Tooltip,
@@ -17,6 +16,7 @@ import {
   Divider,
   Menu,
   Avatar,
+  Chip,
 } from "@mui/material";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -95,6 +95,41 @@ const MIN_WIDTH = 200;
 const MAX_WIDTH = 420;
 const COLLAPSED_WIDTH = 64;
 
+function CollapsedAppButton({
+  icon,
+  label,
+  operations,
+}: {
+  icon: JSX.Element;
+  label: string;
+  operations: { to: string; icon: JSX.Element; label: string }[];
+}) {
+  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  return (
+    <>
+      <Tooltip title={label} placement="right">
+        <ListItemButton
+          onClick={(e) => setAnchor(e.currentTarget)}
+          sx={{ justifyContent: "center", borderRadius: 1, mb: 0.3 }}
+        >
+          <ListItemIcon sx={{ minWidth: 0, color: "primary.main" }}>{icon}</ListItemIcon>
+        </ListItemButton>
+      </Tooltip>
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} anchorOrigin={{ vertical: "top", horizontal: "right" }}>
+        <Typography variant="overline" color="text.secondary" sx={{ px: 2, py: 0.5, display: "block" }}>
+          {label}
+        </Typography>
+        {operations.map((op) => (
+          <MenuItem key={op.to} component={NavLink} to={op.to} onClick={() => setAnchor(null)}>
+            <ListItemIcon sx={{ minWidth: 32 }}>{op.icon}</ListItemIcon>
+            {op.label}
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+}
+
 function NavItem({ to, icon, label }: { to: string; icon: JSX.Element; label: string }) {
   return (
     <ListItemButton
@@ -140,6 +175,39 @@ export function MainShell() {
     queryKey: ["me-companies"],
     queryFn: async () => (await api.get("/auth/me/companies")).data,
   });
+
+  const ticketCompanyId = getCurrentCompanyForApp("ticket");
+  const workflowCompanyId = getCurrentCompanyForApp("workflow");
+
+  const { data: ticketPending } = useQuery({
+    queryKey: ["badge-tickets-pending", ticketCompanyId],
+    queryFn: async () => (await api.get("/tickets", { status: "APERTO", companyId: ticketCompanyId })).data,
+    enabled: !!ticketCompanyId,
+    refetchInterval: 15000,
+  });
+  const { data: ticketDone } = useQuery({
+    queryKey: ["badge-tickets-done", ticketCompanyId],
+    queryFn: async () => (await api.get("/tickets", { status: "RISOLTO", companyId: ticketCompanyId })).data,
+    enabled: !!ticketCompanyId,
+    refetchInterval: 15000,
+  });
+  const { data: instancesPending } = useQuery({
+    queryKey: ["badge-instances-pending", workflowCompanyId],
+    queryFn: async () => (await api.get("/instances", { openClosed: "open", companyId: workflowCompanyId })).data,
+    enabled: !!workflowCompanyId,
+    refetchInterval: 15000,
+  });
+  const { data: instancesDone } = useQuery({
+    queryKey: ["badge-instances-done", workflowCompanyId],
+    queryFn: async () => (await api.get("/instances", { openClosed: "closed", companyId: workflowCompanyId })).data,
+    enabled: !!workflowCompanyId,
+    refetchInterval: 15000,
+  });
+
+  const APP_BADGES: Record<string, { pending?: number; done?: number }> = {
+    ticket: { pending: ticketPending?.total, done: ticketDone?.total },
+    workflow: { pending: instancesPending?.total, done: instancesDone?.total },
+  };
 
   useEffect(() => {
     if (data) setCompanies(data);
@@ -199,7 +267,7 @@ export function MainShell() {
   }
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh" }}>
+    <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <Box
         sx={{
           width: sidebarWidth,
@@ -231,26 +299,6 @@ export function MainShell() {
           </Tooltip>
         </Stack>
 
-        {!collapsed && (
-          <Box sx={{ px: 2, mb: 1.5 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.3 }}>
-              Azienda{APP_LABELS[appKey] ? ` — ${APP_LABELS[appKey]}` : ""}
-            </Typography>
-            <Select
-              size="small"
-              fullWidth
-              value={currentCompanyId ?? ""}
-              onChange={(e) => setCurrentCompanyForApp(appKey, e.target.value as string)}
-            >
-              {list.map((c: any) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </Box>
-        )}
-
         <Box sx={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
           {(Object.entries(
             (company?.applications ?? []).reduce((acc: Record<string, any[]>, appItem: any) => {
@@ -268,20 +316,41 @@ export function MainShell() {
               <List dense sx={{ px: 0.5 }}>
                 {apps.map((appItem: any) =>
                   collapsed ? (
-                    <Tooltip key={appItem.key} title={appItem.name} placement="right">
-                      <ListItemButton
-                        component={NavLink}
-                        to={APP_OPERATIONS[appItem.key]?.[0]?.to ?? "#"}
-                        sx={{ justifyContent: "center", borderRadius: 1, mb: 0.3 }}
-                      >
-                        <ListItemIcon sx={{ minWidth: 0, color: "primary.main" }}>{APP_ICONS[appItem.key] ?? <AccountTreeIcon />}</ListItemIcon>
-                      </ListItemButton>
-                    </Tooltip>
+                    <CollapsedAppButton
+                      key={appItem.key}
+                      icon={APP_ICONS[appItem.key] ?? <AccountTreeIcon />}
+                      label={appItem.name}
+                      operations={(APP_OPERATIONS[appItem.key] ?? []).filter((op) => {
+                        if (!op.adminOnly) return true;
+                        if (user?.isSuperAdmin) return true;
+                        const appCompanyId = getCurrentCompanyForApp(appItem.key);
+                        const appCompany = list.find((c: any) => c.id === appCompanyId);
+                        return (appCompany?.rolesByApp?.[appItem.key] ?? appCompany?.roleKey) === "ADMIN";
+                      })}
+                    />
                   ) : (
                     <Box key={appItem.key}>
                       <ListItemButton onClick={() => setOpenApps((o) => ({ ...o, [appItem.key]: !o[appItem.key] }))} sx={{ borderRadius: 1 }}>
                         <ListItemIcon sx={{ minWidth: 34, color: "primary.main" }}>{APP_ICONS[appItem.key] ?? <AccountTreeIcon />}</ListItemIcon>
                         <ListItemText primary={appItem.name} primaryTypographyProps={{ fontSize: 14, fontWeight: 600 }} />
+                        {typeof APP_BADGES[appItem.key]?.pending === "number" && APP_BADGES[appItem.key].pending! > 0 && (
+                          <Tooltip title="Da elaborare">
+                            <Chip
+                              size="small"
+                              label={APP_BADGES[appItem.key].pending}
+                              sx={{ height: 18, fontSize: 11, mr: 0.5, bgcolor: "var(--signal-amber)", color: "#1a1200", fontWeight: 700 }}
+                            />
+                          </Tooltip>
+                        )}
+                        {typeof APP_BADGES[appItem.key]?.done === "number" && APP_BADGES[appItem.key].done! > 0 && (
+                          <Tooltip title="Elaborati di recente">
+                            <Chip
+                              size="small"
+                              label={APP_BADGES[appItem.key].done}
+                              sx={{ height: 18, fontSize: 11, mr: 0.5, bgcolor: "var(--verdigris)", color: "#04140f", fontWeight: 700 }}
+                            />
+                          </Tooltip>
+                        )}
                         <Tooltip title={`Guida ${appItem.name}`}>
                           <IconButton
                             size="small"
@@ -323,13 +392,7 @@ export function MainShell() {
               <Divider sx={{ my: 1, mx: 1.5 }} />
               <List dense sx={{ px: 0.5 }}>
                 {collapsed ? (
-                  <Tooltip title={t("administration")} placement="right">
-                    <ListItemButton component={NavLink} to="/admin/companies" sx={{ justifyContent: "center", borderRadius: 1 }}>
-                      <ListItemIcon sx={{ minWidth: 0, color: "secondary.main" }}>
-                        <AdminPanelSettingsIcon />
-                      </ListItemIcon>
-                    </ListItemButton>
-                  </Tooltip>
+                  <CollapsedAppButton icon={<AdminPanelSettingsIcon />} label={t("administration")} operations={ADMIN_ITEMS} />
                 ) : (
                   <>
                     <ListItemButton onClick={() => setOpenAdmin((o) => !o)} sx={{ borderRadius: 1 }}>
@@ -383,7 +446,7 @@ export function MainShell() {
         )}
       </Box>
 
-      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         <Box
           sx={{
             height: 56,

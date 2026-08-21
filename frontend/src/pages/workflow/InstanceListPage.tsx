@@ -33,6 +33,7 @@ import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
 import { useSort } from "../../hooks/useSort";
 import { useI18n } from "../../i18n";
+import { CompanySelector } from "../../components/CompanySelector";
 import { StepDots, computeMainSequence, computeStepStatuses } from "./StepDots";
 import { InstanceDrawer } from "./InstanceDrawer";
 
@@ -136,9 +137,12 @@ export function InstanceListPage() {
           </Typography>
           <Typography variant="h5">Istanze workflow</Typography>
         </Stack>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
-          {t("new_instance")}
-        </Button>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <CompanySelector appKey="workflow" />
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+            {t("new_instance")}
+          </Button>
+        </Stack>
       </Stack>
 
       <ToggleButtonGroup

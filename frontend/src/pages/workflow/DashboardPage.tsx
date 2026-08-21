@@ -19,6 +19,7 @@ import {
 import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumberOutlined";
 import { api } from "../../api/client";
 import { useI18n } from "../../i18n";
+import { CompanySelector } from "../../components/CompanySelector";
 import { ClearableTextField } from "../../components/ClearableTextField";
 
 function KpiCard({ label, value, suffix, accent }: { label: string; value: string | number; suffix?: string; accent?: string }) {
@@ -137,7 +138,10 @@ export function DashboardPage() {
           </Typography>
           <Typography variant="h5">{t("kpi_workflow")}</Typography>
         </Stack>
-        <QuickOpenTicket />
+        <Stack direction="row" spacing={2} alignItems="center">
+          <CompanySelector appKey="workflow" />
+          <QuickOpenTicket />
+        </Stack>
       </Stack>
 
       <Grid container spacing={2}>

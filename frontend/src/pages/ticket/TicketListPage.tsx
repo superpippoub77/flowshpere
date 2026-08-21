@@ -27,6 +27,7 @@ import AddIcon from "@mui/icons-material/Add";
 import dayjs from "dayjs";
 import { api } from "../../api/client";
 import { ClearableTextField } from "../../components/ClearableTextField";
+import { CompanySelector } from "../../components/CompanySelector";
 import { useSort } from "../../hooks/useSort";
 import { TicketDrawer } from "./TicketDrawer";
 
@@ -97,9 +98,12 @@ export function TicketListPage() {
           </Typography>
           <Typography variant="h5">Gestione Ticket</Typography>
         </Stack>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
-          Nuovo ticket
-        </Button>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <CompanySelector appKey="ticket" />
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+            Nuovo ticket
+          </Button>
+        </Stack>
       </Stack>
 
       <Paper sx={{ p: 2, mb: 2 }}>

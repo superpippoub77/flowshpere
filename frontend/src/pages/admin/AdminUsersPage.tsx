@@ -21,6 +21,7 @@ import {
   IconButton,
   Avatar,
   TableSortLabel,
+  Pagination,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
@@ -47,15 +48,29 @@ export function AdminUsersPage() {
   const [avatar, setAvatar] = useState<{ base64: string; mimeType: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState({ fullName: "", email: "", userType: "" });
 
-  const { data: users } = useQuery({
-    queryKey: ["admin-users"],
-    queryFn: async () => (await api.get("/admin/users")).data,
+  function updateFilter(key: string, value: string) {
+    setFilters((f) => ({ ...f, [key]: value }));
+    setPage(1);
+  }
+  function clearFilters() {
+    setFilters({ fullName: "", email: "", userType: "" });
+    setPage(1);
+  }
+  const hasActiveFilters = Object.values(filters).some((v) => v);
+
+  const { data: usersPage } = useQuery({
+    queryKey: ["admin-users-table", filters, page],
+    queryFn: async () => (await api.get("/admin/users/table", { ...filters, page })).data,
   });
+  const users = usersPage?.items ?? [];
+  const totalPages = usersPage ? Math.max(1, Math.ceil(usersPage.total / usersPage.pageSize)) : 1;
   const sort = useSort(users ?? []);
 
   function closeDialog() {
-    queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-users-table"] });
     setOpen(false);
     setEditingId(null);
     setForm(emptyForm);
@@ -77,7 +92,7 @@ export function AdminUsersPage() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => api.post(`/admin/users/${id}/delete`, {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-users-table"] });
       setDeleteTarget(null);
       setDeleteError(null);
     },
@@ -135,6 +150,31 @@ export function AdminUsersPage() {
               </TableCell>
               <TableCell align="right">Azioni</TableCell>
             </TableRow>
+            <TableRow>
+              <TableCell sx={{ py: 0.5 }} />
+              <TableCell sx={{ py: 0.5 }}>
+                <ClearableTextField size="small" variant="standard" placeholder="Cerca nome..." value={filters.fullName} onChange={(e) => updateFilter("fullName", e.target.value)} fullWidth />
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }}>
+                <ClearableTextField size="small" variant="standard" placeholder="Cerca email..." value={filters.email} onChange={(e) => updateFilter("email", e.target.value)} fullWidth />
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }} />
+              <TableCell sx={{ py: 0.5 }}>
+                <TextField select size="small" variant="standard" value={filters.userType} onChange={(e) => updateFilter("userType", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
+                  <MenuItem value="">Tutti</MenuItem>
+                  <MenuItem value="UTENTE">Utente</MenuItem>
+                  <MenuItem value="ADMIN">Amministratore</MenuItem>
+                  <MenuItem value="SUPERADMIN">Super Amministratore</MenuItem>
+                </TextField>
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }} align="right">
+                {hasActiveFilters && (
+                  <Button size="small" onClick={clearFilters}>
+                    Cancella filtri
+                  </Button>
+                )}
+              </TableCell>
+            </TableRow>
           </TableHead>
           <TableBody>
             {sort.sorted.map((u: any) => (
@@ -165,9 +205,24 @@ export function AdminUsersPage() {
                 </TableCell>
               </TableRow>
             ))}
+            {users.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6}>
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                    {hasActiveFilters ? "Nessun utente trovato con questi filtri." : "Nessun utente creato."}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Paper>
+
+      {totalPages > 1 && (
+        <Stack alignItems="center" sx={{ mt: 2 }}>
+          <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} />
+        </Stack>
+      )}
 
       <Dialog open={open} onClose={closeDialog} fullWidth maxWidth="xs">
         <DialogTitle>{editingId ? "Modifica utente" : "Nuovo utente"}</DialogTitle>

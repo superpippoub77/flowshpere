@@ -22,6 +22,7 @@ import {
   IconButton,
   CircularProgress,
   TableSortLabel,
+  Pagination,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/EditOutlined";
@@ -29,6 +30,7 @@ import { api } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { ClearableTextField } from "../../components/ClearableTextField";
 import { useI18n } from "../../i18n";
+import { CompanySelector } from "../../components/CompanySelector";
 import { useSort } from "../../hooks/useSort";
 
 const STATUS_LABEL: Record<string, { label: string; color: any }> = {
@@ -52,12 +54,26 @@ export function WorkflowListPage() {
   const user = useAuthStore((s) => s.user);
   const [companyEditTarget, setCompanyEditTarget] = useState<{ id: string; companyId: string } | null>(null);
   const [newCompanyId, setNewCompanyId] = useState("");
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState({ name: "", status: "" });
 
-  const { data: workflows } = useQuery({
-    queryKey: ["workflows"],
-    queryFn: async () => (await api.get("/workflows")).data,
+  function updateFilter(key: string, value: string) {
+    setFilters((f) => ({ ...f, [key]: value }));
+    setPage(1);
+  }
+  function clearFilters() {
+    setFilters({ name: "", status: "" });
+    setPage(1);
+  }
+  const hasActiveFilters = Object.values(filters).some((v) => v);
+
+  const { data: workflowsPage } = useQuery({
+    queryKey: ["workflows-table", filters, page],
+    queryFn: async () => (await api.get("/workflows/table", { ...filters, page })).data,
     refetchInterval: 15000,
   });
+  const workflows = workflowsPage?.items ?? [];
+  const totalPages = workflowsPage ? Math.max(1, Math.ceil(workflowsPage.total / workflowsPage.pageSize)) : 1;
   const sort = useSort(workflows ?? []);
 
   const createMutation = useMutation({
@@ -68,7 +84,7 @@ export function WorkflowListPage() {
     },
     onSuccess: (workflow) => {
       if (targetCompanyId && targetCompanyId !== currentCompanyId) setCurrentCompanyForApp("workflow", targetCompanyId);
-      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+      queryClient.invalidateQueries({ queryKey: ["workflows-table"] });
       setOpenCreate(false);
       setName("");
       setDescription("");
@@ -78,13 +94,13 @@ export function WorkflowListPage() {
 
   const publishMutation = useMutation({
     mutationFn: async (id: string) => api.post(`/workflows/${id}/publish`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workflows"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workflows-table"] }),
   });
 
   const updateCompanyMutation = useMutation({
     mutationFn: async () => api.post(`/workflows/${companyEditTarget!.id}/company`, { newCompanyId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workflows"] });
+      queryClient.invalidateQueries({ queryKey: ["workflows-table"] });
       setCompanyEditTarget(null);
     },
   });
@@ -98,9 +114,12 @@ export function WorkflowListPage() {
           </Typography>
           <Typography variant="h5">{t("your_workflows")}</Typography>
         </Stack>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenCreate(true)}>
-          {t("new_workflow")}
-        </Button>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <CompanySelector appKey="workflow" />
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenCreate(true)}>
+            {t("new_workflow")}
+          </Button>
+        </Stack>
       </Stack>
 
       <Paper>
@@ -129,6 +148,38 @@ export function WorkflowListPage() {
                 </TableSortLabel>
               </TableCell>
               <TableCell align="right">{t("actions")}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ py: 0.5 }}>
+                <ClearableTextField
+                  size="small"
+                  variant="standard"
+                  placeholder="Cerca nome..."
+                  value={filters.name}
+                  onChange={(e) => updateFilter("name", e.target.value)}
+                  fullWidth
+                />
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }} />
+              <TableCell sx={{ py: 0.5 }}>
+                <TextField select size="small" variant="standard" value={filters.status} onChange={(e) => updateFilter("status", e.target.value)} fullWidth SelectProps={{ displayEmpty: true }}>
+                  <MenuItem value="">Tutti</MenuItem>
+                  {Object.entries(STATUS_LABEL).map(([k, v]) => (
+                    <MenuItem key={k} value={k}>
+                      {v.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </TableCell>
+              <TableCell sx={{ py: 0.5 }} />
+              <TableCell sx={{ py: 0.5 }} />
+              <TableCell sx={{ py: 0.5 }} align="right">
+                {hasActiveFilters && (
+                  <Button size="small" onClick={clearFilters}>
+                    Cancella filtri
+                  </Button>
+                )}
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -179,7 +230,7 @@ export function WorkflowListPage() {
               <TableRow>
                 <TableCell colSpan={6}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                    Nessun workflow ancora creato.
+                    {hasActiveFilters ? "Nessun workflow trovato con questi filtri." : "Nessun workflow ancora creato."}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -187,6 +238,12 @@ export function WorkflowListPage() {
           </TableBody>
         </Table>
       </Paper>
+
+      {totalPages > 1 && (
+        <Stack alignItems="center" sx={{ mt: 2 }}>
+          <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} />
+        </Stack>
+      )}
 
       <Dialog open={openCreate} onClose={() => setOpenCreate(false)} fullWidth maxWidth="xs">
         <DialogTitle>Nuovo workflow</DialogTitle>

@@ -151,6 +151,50 @@ switch ($action) {
 
     // ---------------- WORKFLOWS ----------------
 
+    case 'workflows.listPaginated':
+        $ctx = require_company($user, $input['companyId'] ?? null);
+        $pageSize = 10;
+        $page = max(1, (int) ($input['page'] ?? 1));
+        $offset = ($page - 1) * $pageSize;
+
+        $where = ['w.company_id = ?'];
+        $params = [$ctx['companyId']];
+        if (!empty($input['name'])) { $where[] = 'w.name LIKE ?'; $params[] = '%' . $input['name'] . '%'; }
+        if (!empty($input['status'])) { $where[] = 'w.status = ?'; $params[] = $input['status']; }
+        $whereSql = implode(' AND ', $where);
+
+        $countStmt = db()->prepare("SELECT COUNT(*) as c FROM workflows w WHERE $whereSql");
+        $countStmt->execute($params);
+        $total = (int) $countStmt->fetch(PDO::FETCH_ASSOC)['c'];
+
+        $stmt = db()->prepare("
+            SELECT w.*, c.name as company_name FROM workflows w
+            JOIN companies c ON c.id = w.company_id
+            WHERE $whereSql ORDER BY w.updated_at DESC LIMIT $pageSize OFFSET $offset
+        ");
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $out = [];
+        foreach ($rows as $w) {
+            $vStmt = db()->prepare('SELECT MAX(version) as v FROM workflow_versions WHERE workflow_id = ?');
+            $vStmt->execute([$w['id']]);
+            $latest = $vStmt->fetch(PDO::FETCH_ASSOC)['v'];
+
+            $cStmt = db()->prepare('SELECT COUNT(*) as c FROM workflow_instances WHERE workflow_id = ?');
+            $cStmt->execute([$w['id']]);
+            $count = $cStmt->fetch(PDO::FETCH_ASSOC)['c'];
+
+            $out[] = [
+                'id' => $w['id'], 'name' => $w['name'], 'description' => $w['description'],
+                'status' => $w['status'], 'instanceCount' => (int) $count,
+                'latestVersion' => $latest ? (int) $latest : null, 'updatedAt' => $w['updated_at'],
+                'companyId' => $w['company_id'], 'companyName' => $w['company_name'],
+            ];
+        }
+        json_response(['items' => $out, 'total' => $total, 'page' => $page, 'pageSize' => $pageSize]);
+        break;
+
     case 'workflows.list':
         $ctx = require_company($user, $input['companyId'] ?? null);
         $stmt = db()->prepare('
@@ -836,6 +880,35 @@ switch ($action) {
 
     // ---------------- AMMINISTRAZIONE (solo Super Amministratore) ----------------
 
+    case 'admin.users.listPaginated':
+        require_super_admin($user);
+        $pageSize = 10;
+        $page = max(1, (int) ($input['page'] ?? 1));
+        $offset = ($page - 1) * $pageSize;
+
+        $where = [];
+        $params = [];
+        if (!empty($input['fullName'])) { $where[] = 'full_name LIKE ?'; $params[] = '%' . $input['fullName'] . '%'; }
+        if (!empty($input['email'])) { $where[] = 'email LIKE ?'; $params[] = '%' . $input['email'] . '%'; }
+        if (!empty($input['userType'])) { $where[] = 'user_type = ?'; $params[] = $input['userType']; }
+        $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        $countStmt = db()->prepare("SELECT COUNT(*) as c FROM users $whereSql");
+        $countStmt->execute($params);
+        $total = (int) $countStmt->fetch(PDO::FETCH_ASSOC)['c'];
+
+        $stmt = db()->prepare("SELECT id, email, full_name, user_type, is_super_admin, phone, job_title, avatar_path FROM users $whereSql ORDER BY full_name LIMIT $pageSize OFFSET $offset");
+        $stmt->execute($params);
+        json_response([
+            'items' => array_map(fn($u) => [
+                'id' => $u['id'], 'email' => $u['email'], 'fullName' => $u['full_name'],
+                'userType' => $u['user_type'], 'isSuperAdmin' => (bool) $u['is_super_admin'],
+                'phone' => $u['phone'], 'jobTitle' => $u['job_title'], 'hasAvatar' => !empty($u['avatar_path']),
+            ], $stmt->fetchAll(PDO::FETCH_ASSOC)),
+            'total' => $total, 'page' => $page, 'pageSize' => $pageSize,
+        ]);
+        break;
+
     case 'admin.users.list':
         require_super_admin($user);
         $rows = db()->query('SELECT id, email, full_name, user_type, is_super_admin, phone, job_title, avatar_path FROM users ORDER BY full_name')->fetchAll(PDO::FETCH_ASSOC);
@@ -921,6 +994,26 @@ switch ($action) {
         db()->prepare('DELETE FROM users WHERE id = ?')->execute([$input['id']]);
         log_audit(null, $user['id'], null, 'Utente eliminato: "' . ($deletedUser['full_name'] ?? $input['id']) . '" (' . ($deletedUser['email'] ?? '') . ')');
         json_response(['ok' => true]);
+        break;
+
+    case 'admin.companies.listPaginated':
+        require_super_admin($user);
+        $pageSize = 10;
+        $page = max(1, (int) ($input['page'] ?? 1));
+        $offset = ($page - 1) * $pageSize;
+
+        $where = [];
+        $params = [];
+        if (!empty($input['name'])) { $where[] = 'name LIKE ?'; $params[] = '%' . $input['name'] . '%'; }
+        $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        $countStmt = db()->prepare("SELECT COUNT(*) as c FROM companies $whereSql");
+        $countStmt->execute($params);
+        $total = (int) $countStmt->fetch(PDO::FETCH_ASSOC)['c'];
+
+        $stmt = db()->prepare("SELECT id, name, slug FROM companies $whereSql ORDER BY name LIMIT $pageSize OFFSET $offset");
+        $stmt->execute($params);
+        json_response(['items' => $stmt->fetchAll(PDO::FETCH_ASSOC), 'total' => $total, 'page' => $page, 'pageSize' => $pageSize]);
         break;
 
     case 'admin.companies.list':
